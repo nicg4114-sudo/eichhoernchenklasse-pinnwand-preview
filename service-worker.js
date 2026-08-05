@@ -7,7 +7,7 @@
 // Anfragen an Supabase (die eigentlichen Pinnwand-Daten) laufen immer direkt
 // übers Netz, damit nie veraltete Inhalte angezeigt werden.
 
-const CACHE_NAME = "pinnwand-shell-v1";
+const CACHE_NAME = "pinnwand-shell-v2";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -45,6 +45,40 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
-// ---- Vorbereitung für Punkt 3 (Push-Benachrichtigungen) ----
-// Hier kommen später "push"- und "notificationclick"-Listener hinzu, sobald
-// der Server-Baustein dafür steht. Bewusst noch nicht aktiv.
+// ---- Push-Benachrichtigungen ----
+// Der Versand selbst passiert serverseitig (Supabase Edge Function
+// "send-push", ausgelöst über einen Database Webhook bei jedem neuen
+// Eintrag). Hier wird die eingehende Push-Nachricht nur noch als System-
+// Benachrichtigung angezeigt.
+
+self.addEventListener("push", (event) => {
+  let data = { title: "Neuigkeit auf der Pinnwand", body: "" };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch {
+    // Falls der Payload mal kein JSON ist, bleibt der Standardtext stehen.
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "icon-192.png",
+      badge: "icon-192.png",
+      tag: data.type || "pinnwand",
+      data: { url: "./" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = new URL(event.notification.data?.url || "./", self.location.href).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((c) => c.url === targetUrl);
+      if (existing) return existing.focus();
+      return self.clients.openWindow(targetUrl);
+    })
+  );
+});

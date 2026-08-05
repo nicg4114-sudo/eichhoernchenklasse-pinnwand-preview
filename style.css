@@ -94,6 +94,27 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
 .views button:hover { color: var(--ink); }
 .views button.active { color: #fff; background: var(--ink); }
 
+/* Glocke für Push-Benachrichtigungen — standardmäßig ausgeblendet (per JS
+   nur gezeigt, wenn der Browser Push überhaupt unterstützt), gefüllt/farbig
+   sobald ein Abo aktiv ist. */
+.push-bell {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.push-bell svg { width: 17px; height: 17px; }
+.push-bell:hover { color: var(--ink); }
+.push-bell.active { background: var(--accent); color: #fff; }
+
 /* ---------- Hauptbereich ---------- */
 
 main {

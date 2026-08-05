@@ -62,6 +62,7 @@ const ICONS = {
   menu: `<svg viewBox="0 0 20 20" fill="currentColor"><circle cx="4.5" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="15.5" cy="10" r="1.6"/></svg>`,
   pin: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 17.5s6-5.6 6-10a6 6 0 1 0-12 0c0 4.4 6 10 6 10z"/><circle cx="10" cy="7.4" r="2.1"/></svg>`,
   chevron: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 4.5l6 5.5-6 5.5"/></svg>`,
+  bell: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8a5 5 0 0 1 10 0c0 3.2 1 4.3 1.4 4.8H3.6C4 12.3 5 11.2 5 8z"/><path d="M8.2 15.5a1.8 1.8 0 0 0 3.5 0"/></svg>`,
 };
 
 /* ---------- Zustand ---------- */
@@ -1502,6 +1503,81 @@ async function handleFeedChange(ev) {
   }
 }
 
+/* ---------- Push-Benachrichtigungen ---------- */
+
+const elPushBell = $("pushBell");
+
+// VAPID-Public-Key kommt als base64url-String aus config.js, die Push-API
+// will ihn aber als Uint8Array.
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+function pushSupported() {
+  return "serviceWorker" in navigator && "PushManager" in window && !!cfg.VAPID_PUBLIC_KEY;
+}
+
+function setBellState(active) {
+  if (!elPushBell) return;
+  elPushBell.classList.toggle("active", active);
+  elPushBell.innerHTML = ICONS.bell;
+  elPushBell.title = active
+    ? "Benachrichtigungen sind aktiv (antippen zum Deaktivieren)"
+    : "Benachrichtigungen aktivieren";
+}
+
+async function refreshBellState() {
+  if (!elPushBell || !pushSupported()) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    setBellState(!!sub);
+  } catch {
+    setBellState(false);
+  }
+}
+
+async function togglePush() {
+  if (!elPushBell) return;
+  elPushBell.disabled = true;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+
+    if (existing) {
+      await rpc("delete_push_subscription", { p_endpoint: existing.endpoint });
+      await existing.unsubscribe();
+      setBellState(false);
+      toast("Benachrichtigungen deaktiviert.");
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      toast("Benachrichtigungen sind im Browser blockiert — das lässt sich nur in den Browser-/Website-Einstellungen wieder ändern.", true);
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      toast("Ohne Erlaubnis können keine Benachrichtigungen geschickt werden.", true);
+      return;
+    }
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(cfg.VAPID_PUBLIC_KEY),
+    });
+    await rpc("save_push_subscription", { p: sub.toJSON() });
+    setBellState(true);
+    toast("Benachrichtigungen aktiviert.");
+  } catch (err) {
+    toast(err.message || "Benachrichtigungen konnten nicht aktiviert werden.", true);
+  } finally {
+    elPushBell.disabled = false;
+  }
+}
+
 /* ---------- Initialisierung ---------- */
 
 function init() {
@@ -1549,6 +1625,13 @@ function init() {
   dlgPrompt.addEventListener("click", (ev) => {
     if (ev.target.closest("[data-close]")) dlgPrompt.close();
   });
+
+  if (elPushBell && pushSupported()) {
+    elPushBell.hidden = false;
+    elPushBell.innerHTML = ICONS.bell;
+    elPushBell.addEventListener("click", togglePush);
+    refreshBellState();
+  }
 
   render();
 
