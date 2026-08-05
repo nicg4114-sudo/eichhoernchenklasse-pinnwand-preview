@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Eichhörnchenklasse — Pinnwand</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='0.9em'%20font-size='90'%3E%F0%9F%90%BF%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <h1>🐿️ Eichhörnchenklasse</h1>
+    <nav class="views" id="viewTabs" aria-label="Ansicht">
+      <button data-view="feed" class="active">Pinnwand</button>
+      <button data-view="archiv">Archiv</button>
+      <button data-view="papierkorb">Papierkorb</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div id="notice" class="notice" hidden></div>
+  <section id="feed" class="feed" aria-live="polite"></section>
+  <p id="empty" class="empty" hidden></p>
+</main>
+
+<button id="fab" class="fab" title="Neuen Eintrag erstellen" aria-label="Neuen Eintrag erstellen">+</button>
+
+<!-- Schritt 1: Was möchtest du erstellen? -->
+<dialog id="dlgType" class="dlg">
+  <h2>Was möchtest du erstellen?</h2>
+  <div class="type-grid">
+    <button data-type="hinweis"><b>Hinweis</b><span>Nachricht mit Text, Bildern & Dateien</span></button>
+    <button data-type="termin"><b>Termin</b><span>Datum, Uhrzeit, Ort</span></button>
+    <button data-type="liste"><b>Liste</b><span>Abhaken oder selbst eintragen</span></button>
+    <button data-type="tabelle"><b>Tabelle</b><span>Eigene Spalten, wie eine Excel-Liste</span></button>
+    <button data-type="umfrage"><b>Umfrage</b><span>Gemeinsam abstimmen</span></button>
+    <button data-type="datei"><b>Datei</b><span>PDF oder Bild, max. 10 MB</span></button>
+  </div>
+  <div class="dlg-actions">
+    <button class="btn ghost" data-close>Abbrechen</button>
+  </div>
+</dialog>
+
+<!-- Schritt 2: Formular (Inhalt wird von app.js erzeugt) -->
+<dialog id="dlgEditor" class="dlg">
+  <form id="editorForm" novalidate>
+    <h2 id="editorTitle">Neu</h2>
+    <div id="editorFields"></div>
+    <p id="editorError" class="form-error" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" data-close>Abbrechen</button>
+      <button type="submit" class="btn primary" id="editorSubmit">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Bestätigung (z. B. vor dem Löschen) -->
+<dialog id="dlgConfirm" class="dlg small">
+  <p id="confirmText"></p>
+  <div class="dlg-actions">
+    <button class="btn ghost" data-answer="nein">Abbrechen</button>
+    <button class="btn danger" data-answer="ja" id="confirmOk">Löschen</button>
+  </div>
+</dialog>
+
+<!-- Kurze Texteingabe(n) (Name eintragen etc.) -->
+<dialog id="dlgPrompt" class="dlg small">
+  <form id="promptForm" novalidate>
+    <h2 id="promptTitle"></h2>
+    <div id="promptFields"></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" data-close>Abbrechen</button>
+      <button type="submit" class="btn primary">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" hidden></div>
+
+<noscript><p class="empty">Diese Seite braucht JavaScript.</p></noscript>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.7/purify.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
