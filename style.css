@@ -174,13 +174,17 @@ main {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   position: sticky;
   top: 58px;
   z-index: 10;
   background: var(--bg);
-  padding-top: 8px;
+  padding: 8px 0 12px;
   margin-top: -8px;
+  /* Deutliche "Kante" zum scrollenden Inhalt darunter, damit die fest
+        stehenden Kacheln beim Scrollen klar vom durchlaufenden Panel getrennt
+        bleiben und nichts optisch ineinanderlaeuft. */
+  box-shadow: 0 16px 20px -18px rgba(38, 28, 12, .55);
 }
 
 .rubrik-tile {
