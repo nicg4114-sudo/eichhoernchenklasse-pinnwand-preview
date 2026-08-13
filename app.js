@@ -68,8 +68,16 @@ const ICONS = {
 /* ---------- Zustand ---------- */
 
 let cards = [];
-let view = "feed";        // feed | archiv | papierkorb
+let view = "feed";        // dashboard | feed | archiv | papierkorb
 let loaded = false;
+let classesList = [];     // aus DB geladen: [{id, slug, name}, ...]
+
+// Welche Klasse gerade "meine" ist — rein clientseitiger Anzeigefilter,
+// kein echter Zugriffsschutz (der kommt später mit Einmal-Codes, siehe
+// plan-mehrklassen-dashboard.md). "" = beide Klassen anzeigen.
+const CLASS_KEY = "pinnwand_meine_klasse";
+let activeClassId = localStorage.getItem(CLASS_KEY) || "";
+const CLASS_ICON = { eichhoernchen: "🐿️", schmetterling: "🦋" };
 const pollEditing = new Set();   // Karten-IDs, bei denen gerade Optionen gewählt werden
 let editorState = null;          // { mode: 'create'|'edit', type, card, items }
 let pendingParentId = null;      // Termin-Id, mit der die nächste neu angelegte Karte verknüpft wird
@@ -122,6 +130,8 @@ const elFeed = $("feed");
 const elEmpty = $("empty");
 const elNotice = $("notice");
 const elFab = $("fab");
+const elClassSelect = $("classSelect");
+const elBrandTitle = $("brandTitle");
 const dlgType = $("dlgType");
 const dlgEditor = $("dlgEditor");
 const dlgConfirm = $("dlgConfirm");
@@ -182,6 +192,35 @@ function todayStart() {
 
 function isPastTermin(c) {
   return c.type === "termin" && !!c.event_date && parseISODate(c.event_date) < todayStart();
+}
+
+// Enddatum (falls gesetzt) zählt für alle Kartentypen zusätzlich als
+// Ablaufdatum — eine Karte gilt als abgelaufen, sobald der Termin selbst
+// vorbei ist ODER das gesetzte Enddatum überschritten wurde.
+function isExpired(c) {
+  if (isPastTermin(c)) return true;
+  return !!c.end_date && parseISODate(c.end_date) < todayStart();
+}
+
+// Das für die Archiv-Sortierung relevante "abgelaufen am"-Datum.
+function expiryDate(c) {
+  if (c.type === "termin" && c.event_date) return c.event_date;
+  return c.end_date || null;
+}
+
+// Sortierschlüssel fürs Dashboard: Wichtig zuerst, danach nach Datum
+// (Termin-Datum bzw. Enddatum) aufsteigend, Karten ohne Datum ans Ende.
+function dashboardSortDate(c) {
+  return (c.type === "termin" && c.event_date) ? c.event_date : (c.end_date || null);
+}
+function dashboardSort(a, b) {
+  const ai = a.important ? 1 : 0, bi = b.important ? 1 : 0;
+  if (ai !== bi) return bi - ai;
+  const ad = dashboardSortDate(a), bd = dashboardSortDate(b);
+  if (ad && bd) return ad.localeCompare(bd);
+  if (ad && !bd) return -1;
+  if (!ad && bd) return 1;
+  return String(a.created_at).localeCompare(String(b.created_at));
 }
 
 function fmtDateLong(s) {
@@ -336,6 +375,44 @@ async function fetchCards() {
   return data;
 }
 
+async function fetchClasses() {
+  const res = await fetch(`${REST()}/classes?select=*&order=name.asc`, { headers: AUTH() });
+  if (!res.ok) throw await apiError(res);
+  return res.json();
+}
+
+async function loadClasses() {
+  try {
+    classesList = await fetchClasses();
+  } catch {
+    classesList = [];
+  }
+  renderClassSelect();
+}
+
+// Kachel-/Kartenfilter je nach gewählter Klasse: eigene Klasse + "Gemeinsam"
+// (class_id null) sind sichtbar, die jeweils andere Klasse wird ausgeblendet.
+// Bei "Beide Klassen" (activeClassId === "") ist alles sichtbar.
+function inActiveClass(c) {
+  return !activeClassId || c.class_id === activeClassId || !c.class_id;
+}
+
+function renderClassSelect() {
+  if (!elClassSelect) return;
+  const opts = [`<option value="">Beide Klassen</option>`].concat(
+    classesList.map((cl) =>
+      `<option value="${cl.id}">${CLASS_ICON[cl.slug] || ""} ${esc(cl.name)}</option>`));
+  elClassSelect.innerHTML = opts.join("");
+  elClassSelect.value = activeClassId;
+  updateBrandTitle();
+}
+
+function updateBrandTitle() {
+  if (!elBrandTitle) return;
+  const cls = classesList.find((c) => c.id === activeClassId);
+  elBrandTitle.textContent = cls ? `${CLASS_ICON[cls.slug] || ""} ${cls.name}` : "🐿️🦋 Klassen-Pinnwand";
+}
+
 async function rpc(name, args = {}) {
   const res = await fetch(`${REST()}/rpc/${name}`, {
     method: "POST",
@@ -390,15 +467,20 @@ async function reload({ silent = false } = {}) {
 function visibleCards() {
   if (view === "papierkorb") {
     return cards
-      .filter((c) => c.trashed_at && purgeDate(c) > new Date())
+      .filter((c) => c.trashed_at && purgeDate(c) > new Date() && inActiveClass(c))
       .sort((a, b) => String(b.trashed_at).localeCompare(String(a.trashed_at)));
   }
   if (view === "archiv") {
     return cards
-      .filter((c) => !c.trashed_at && isPastTermin(c))
-      .sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
+      .filter((c) => !c.trashed_at && isExpired(c) && inActiveClass(c))
+      .sort((a, b) => String(expiryDate(b)).localeCompare(String(expiryDate(a))));
   }
-  return cards.filter((c) => !c.trashed_at && !isPastTermin(c));
+  if (view === "dashboard") {
+    return cards
+      .filter((c) => !c.trashed_at && !isExpired(c) && inActiveClass(c))
+      .sort(dashboardSort);
+  }
+  return cards.filter((c) => !c.trashed_at && !isExpired(c) && inActiveClass(c));
 }
 
 /* ---------- Rendering ---------- */
@@ -625,11 +707,16 @@ function renderCard(c, opts) {
         { day: "numeric", month: "long", year: "numeric" })} endgültig gelöscht.</p>`
     : "";
 
+  const endNote = (c.end_date && !inTrash)
+    ? ` · Endet am ${esc(fmtDateLong(c.end_date))}` : "";
+
   return `
     <article class="card ${c.pinned && !inTrash ? "pinned" : ""} ${inTrash ? "trashed" : ""} ${opts && opts.nested ? "nested" : ""}" data-card="${c.id}">
       <div class="card-top">
         <span class="type-badge ${c.type}">${TYPE_LABELS[c.type]}</span>
+        ${c.important && !inTrash ? `<span class="important-flag">★ Wichtig</span>` : ""}
         ${c.pinned && !inTrash ? `<span class="pin-flag">${ICONS.pin}Angepinnt</span>` : ""}
+        ${!inTrash ? classChipHtml(c) : ""}
         <span class="spacer"></span>
         <details class="menu">
           <summary title="Aktionen">${ICONS.menu}</summary>
@@ -640,13 +727,24 @@ function renderCard(c, opts) {
       ${c.parent_id ? linkedBackChipHtml(c) : ""}
       ${trashNote}
       ${body}
-      <div class="card-meta">Erstellt am ${fmtTimestamp(c.created_at)}</div>
+      <div class="card-meta">Erstellt am ${fmtTimestamp(c.created_at)}${endNote}</div>
     </article>`;
 }
 
 // Kleiner Verweis-Chip auf einer verknüpften Karte, zurück zum Termin, an
 // den sie angehängt wurde. Klick springt zur Termin-Karte (klappt deren
 // Abschnitt in der Übersicht bei Bedarf zuerst auf).
+// Kleiner Hinweis-Chip, welcher Klasse eine Karte gehört bzw. ob sie
+// gemeinsam ist — nur relevant, wenn gerade "Beide Klassen" gewählt ist,
+// bei gefiltertem Blick auf eine Klasse ist er überflüssig.
+function classChipHtml(c) {
+  if (activeClassId) return "";
+  if (!c.class_id) return `<span class="class-chip shared">🏫 Gemeinsam</span>`;
+  const cls = classesList.find((x) => x.id === c.class_id);
+  if (!cls) return "";
+  return `<span class="class-chip">${CLASS_ICON[cls.slug] || ""} ${esc(cls.name)}</span>`;
+}
+
 function linkedBackChipHtml(c) {
   const parent = cardById(c.parent_id);
   if (!parent) return "";
@@ -753,6 +851,7 @@ function renderGroupedFeed(list) {
 }
 
 const EMPTY_TEXT = {
+  dashboard: "Nichts Aktuelles im Dashboard.",
   feed: "Noch nichts an der Pinnwand. Mit dem +-Knopf unten rechts geht's los.",
   archiv: "Keine vergangenen Termine.",
   papierkorb: "Der Papierkorb ist leer.",
@@ -940,6 +1039,23 @@ function editorFieldsHtml(type, card) {
     html += fieldHtml("Datei * (PDF, JPG, PNG oder WebP — max. 10 MB)",
       `<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" required>`);
   }
+
+  if (classesList.length) {
+    const currentClassId = card ? (card.class_id || "") : activeClassId;
+    const opts = [`<option value="">Gemeinsam (beide Klassen)</option>`].concat(
+      classesList.map((cl) =>
+        `<option value="${cl.id}" ${cl.id === currentClassId ? "selected" : ""}>${CLASS_ICON[cl.slug] || ""} ${esc(cl.name)}</option>`));
+    html += fieldHtml("Klasse", `<select name="class_id">${opts.join("")}</select>`);
+  }
+
+  html += fieldHtml("Endet am (optional)",
+    `<input type="date" name="end_date" value="${card && card.end_date ? esc(card.end_date) : ""}">`);
+
+  html += `
+    <label class="field-check">
+      <input type="checkbox" name="important" ${card && card.important ? "checked" : ""}>
+      <span>★ Wichtig (erscheint oben im Dashboard)</span>
+    </label>`;
 
   html += `
     <label class="field-check">
@@ -1187,7 +1303,10 @@ async function submitEditor() {
     title,
     body: String(fd.get("body") || "").trim(),
     pinned: fd.get("pinned") === "on",
+    important: fd.get("important") === "on",
+    end_date: String(fd.get("end_date") || ""),
   };
+  if (fd.has("class_id")) common.class_id = String(fd.get("class_id") || "");
 
   if (st.type === "hinweis" || st.type === "termin") {
     // Hinweis und Termin haben keine <textarea name="body"> mehr, sondern
@@ -1580,7 +1699,7 @@ async function togglePush() {
 
 /* ---------- Initialisierung ---------- */
 
-function init() {
+async function init() {
   // Ansichten und Filter
   $("viewTabs").addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-view]");
@@ -1588,6 +1707,17 @@ function init() {
     view = btn.dataset.view;
     render();
   });
+
+  // Klassenwahl (Eichhörnchen/Schmetterling/Beide) — Anzeigefilter
+  if (elClassSelect) {
+    elClassSelect.addEventListener("change", () => {
+      activeClassId = elClassSelect.value;
+      if (activeClassId) localStorage.setItem(CLASS_KEY, activeClassId);
+      else localStorage.removeItem(CLASS_KEY);
+      updateBrandTitle();
+      render();
+    });
+  }
   // Feed-Interaktionen
   elFeed.addEventListener("click", handleFeedClick);
   elFeed.addEventListener("change", handleFeedChange);
@@ -1644,6 +1774,7 @@ function init() {
     return;
   }
 
+  await loadClasses();
   reload();
 
   // Alle 60 s still aktualisieren (nur wenn sichtbar und kein Dialog offen)
