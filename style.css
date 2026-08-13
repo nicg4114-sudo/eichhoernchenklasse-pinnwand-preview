@@ -17,6 +17,8 @@
   --danger-bg: #fbe9e6;
   --ok:        #3f7d52;
   --ok-bg:     #e8f3ea;
+  --important:    #c8891b;
+  --important-bg: #fdf1de;
   --radius:    16px;
   --radius-sm: 10px;
   --shadow:    0 1px 2px rgba(38, 28, 12, .06), 0 6px 18px -10px rgba(38, 28, 12, .12);
@@ -75,6 +77,20 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
   font-size: 1.28rem;
   font-weight: 800;
   letter-spacing: -.02em;
+}
+
+/* Klassenwahl (Eichhörnchen/Schmetterling/Beide) — rein clientseitiger
+   Anzeigefilter, kein echter Zugriffsschutz (siehe plan-mehrklassen-dashboard.md). */
+.class-select {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
 }
 
 .views { display: flex; gap: 2px; background: var(--bg); padding: 3px; border-radius: 999px; }
@@ -182,8 +198,8 @@ main {
   padding: 8px 0 12px;
   margin-top: -8px;
   /* Deutliche "Kante" zum scrollenden Inhalt darunter, damit die fest
-        stehenden Kacheln beim Scrollen klar vom durchlaufenden Panel getrennt
-        bleiben und nichts optisch ineinanderlaeuft. */
+     stehenden Kacheln beim Scrollen klar vom durchlaufenden Panel getrennt
+     bleiben und nichts optisch ineinanderläuft. */
   box-shadow: 0 16px 20px -18px rgba(38, 28, 12, .55);
 }
 
@@ -387,6 +403,28 @@ main {
   font-weight: 600;
 }
 .pin-flag svg { width: 13px; height: 13px; display: block; }
+
+.important-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .8rem;
+  color: var(--important);
+  font-weight: 700;
+}
+
+.class-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: .76rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.class-chip.shared { color: var(--accent-dk); background: var(--accent-bg); }
 
 .card-top .spacer { flex: 1; }
 
