@@ -51,6 +51,7 @@ const TYPE_ORDER = ["hinweis", "termin", "liste", "tabelle", "umfrage", "datei"]
 
 // Kleines, einheitliches Icon-Set (ersetzt Emojis für ein ruhigeres Bild).
 const ICONS = {
+  arrowUp: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="15.5" x2="10" y2="4.5"/><polyline points="5,9.5 10,4.5 15,9.5"/></svg>`,
   hinweis: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7.25"/><line x1="10" y1="9" x2="10" y2="14"/><circle cx="10" cy="6.3" r="0.9" fill="currentColor" stroke="none"/></svg>`,
   termin: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4.2" width="14" height="12" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="6.5" y1="2.5" x2="6.5" y2="5.5"/><line x1="13.5" y1="2.5" x2="13.5" y2="5.5"/></svg>`,
   liste: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 5.5l1.3 1.3 2-2.3"/><line x1="8.5" y1="5.5" x2="17" y2="5.5"/><line x1="3.2" y1="10" x2="17" y2="10"/><line x1="3.2" y1="14.5" x2="17" y2="14.5"/></svg>`,
@@ -77,6 +78,17 @@ let classesList = [];     // aus DB geladen: [{id, slug, name}, ...]
 // plan-mehrklassen-dashboard.md). "" = beide Klassen anzeigen.
 const CLASS_KEY = "pinnwand_meine_klasse";
 let activeClassId = localStorage.getItem(CLASS_KEY) || "";
+// Per Klassen-Link (?klasse=eichhoernchen / ?klasse=schmetterling) einmal
+// geöffnet, sperrt dieses Gerät dauerhaft auf die jeweilige Klasse (siehe
+// applyClassLink) — bewusst nur eine bequeme Voreinstellung, kein
+// Datenbankschutz. Wer den Link ohne "?klasse=" öffnet (z. B. Geschwister
+// in beiden Klassen, oder die Lehrkraft), behält die volle Auswahl.
+const CLASS_LOCK_KEY = "pinnwand_klasse_gesperrt";
+let classLocked = localStorage.getItem(CLASS_LOCK_KEY) === "1";
+// Merkt sich den zuletzt eingetragenen Ersteller-Namen als Vorschlag für die
+// nächste neue Karte (Lehrkraft/Elternsprecher legen meist mehrere Karten
+// hintereinander an und müssten sonst jedes Mal neu tippen).
+const CREATOR_NAME_KEY = "pinnwand_ersteller_name";
 const CLASS_ICON = { eichhoernchen: "🐿️", schmetterling: "🦋" };
 const pollEditing = new Set();   // Karten-IDs, bei denen gerade Optionen gewählt werden
 let editorState = null;          // { mode: 'create'|'edit', type, card, items }
@@ -130,6 +142,7 @@ const elFeed = $("feed");
 const elEmpty = $("empty");
 const elNotice = $("notice");
 const elFab = $("fab");
+const elScrollTopBtn = $("scrollTopBtn");
 const elClassSelect = $("classSelect");
 const elBrandTitle = $("brandTitle");
 const dlgType = $("dlgType");
@@ -229,8 +242,10 @@ function fmtDateLong(s) {
 }
 
 function fmtTimestamp(ts) {
-  return new Date(ts).toLocaleDateString("de-DE",
-    { day: "numeric", month: "long", year: "numeric" });
+  const d = new Date(ts);
+  const datum = d.toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" });
+  const zeit = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  return `${datum}, ${zeit} Uhr`;
 }
 
 function fmtTime(t) {
@@ -387,7 +402,26 @@ async function loadClasses() {
   } catch {
     classesList = [];
   }
+  applyClassLink();
   renderClassSelect();
+}
+
+// Klassen-Link auswerten: "?klasse=<slug>" setzt einmalig die passende
+// Klasse fest und sperrt sie dauerhaft für dieses Gerät (siehe Kommentar
+// bei CLASS_LOCK_KEY oben). Der Parameter wird danach aus der Adresszeile
+// entfernt, die Sperre bleibt trotzdem bestehen (per localStorage).
+function applyClassLink() {
+  const slug = new URLSearchParams(location.search).get("klasse");
+  if (slug) {
+    const cls = classesList.find((c) => c.slug === slug);
+    if (cls) {
+      activeClassId = cls.id;
+      classLocked = true;
+      localStorage.setItem(CLASS_KEY, activeClassId);
+      localStorage.setItem(CLASS_LOCK_KEY, "1");
+    }
+    history.replaceState(null, "", location.pathname + location.hash);
+  }
 }
 
 // Kachel-/Kartenfilter je nach gewählter Klasse: eigene Klasse + "Gemeinsam"
@@ -399,6 +433,17 @@ function inActiveClass(c) {
 
 function renderClassSelect() {
   if (!elClassSelect) return;
+  if (classLocked) {
+    const cls = classesList.find((c) => c.id === activeClassId);
+    elClassSelect.innerHTML = cls
+      ? `<option value="${cls.id}">${CLASS_ICON[cls.slug] || ""} ${esc(cls.name)}</option>`
+      : `<option value="">Beide Klassen</option>`;
+    elClassSelect.value = activeClassId;
+    elClassSelect.disabled = true;
+    elClassSelect.title = "Über einen eigenen Link für diese Klasse geöffnet.";
+    updateBrandTitle();
+    return;
+  }
   const opts = [`<option value="">Beide Klassen</option>`].concat(
     classesList.map((cl) =>
       `<option value="${cl.id}">${CLASS_ICON[cl.slug] || ""} ${esc(cl.name)}</option>`));
@@ -589,6 +634,10 @@ function renderUmfrage(c) {
   const votes = opts.flatMap((o) => (o.poll_votes || []).map((v) => ({ opt: o.id, token: v.device_token })));
   const myVotes = new Set(votes.filter((v) => v.token === deviceToken).map((v) => v.opt));
   const voters = new Set(votes.map((v) => v.token)).size;
+  // Anteil je Option relativ zu allen abgegebenen Stimmen (nicht zur Anzahl
+  // Abstimmender) — bei Mehrfachauswahl gibt eine Person mehrere Stimmen ab,
+  // sonst würden mehrere gewählte Optionen alle fälschlich 100 % zeigen.
+  const totalVotes = votes.length;
   const choosing = pollEditing.has(c.id) || myVotes.size === 0;
 
   let html = `<div class="poll">`;
@@ -616,7 +665,7 @@ function renderUmfrage(c) {
 
   for (const o of opts) {
     const n = (o.poll_votes || []).length;
-    const pct = voters ? Math.round((n / voters) * 100) : 0;
+    const pct = totalVotes ? Math.round((n / totalVotes) * 100) : 0;
     html += `
       <div class="poll-opt">
         <div class="bar" style="width:${pct}%"></div>
@@ -709,25 +758,26 @@ function renderCard(c, opts) {
 
   const endNote = (c.end_date && !inTrash)
     ? ` · Endet am ${esc(fmtDateLong(c.end_date))}` : "";
+  const creatorNote = c.creator_name ? ` · von ${esc(c.creator_name)}` : "";
 
   return `
     <article class="card ${c.pinned && !inTrash ? "pinned" : ""} ${inTrash ? "trashed" : ""} ${opts && opts.nested ? "nested" : ""}" data-card="${c.id}">
       <div class="card-top">
         <span class="type-badge ${c.type}">${TYPE_LABELS[c.type]}</span>
-        ${c.important && !inTrash ? `<span class="important-flag">★ Wichtig</span>` : ""}
         ${c.pinned && !inTrash ? `<span class="pin-flag">${ICONS.pin}Angepinnt</span>` : ""}
         ${!inTrash ? classChipHtml(c) : ""}
         <span class="spacer"></span>
+        ${classLocked ? "" : `
         <details class="menu">
           <summary title="Aktionen">${ICONS.menu}</summary>
           <div class="menu-list">${menu}</div>
-        </details>
+        </details>`}
       </div>
       <h3>${esc(c.title)}</h3>
       ${c.parent_id ? linkedBackChipHtml(c) : ""}
       ${trashNote}
       ${body}
-      <div class="card-meta">Erstellt am ${fmtTimestamp(c.created_at)}${endNote}</div>
+      <div class="card-meta">Erstellt am ${fmtTimestamp(c.created_at)}${creatorNote}${endNote}</div>
     </article>`;
 }
 
@@ -738,8 +788,13 @@ function renderCard(c, opts) {
 // gemeinsam ist — nur relevant, wenn gerade "Beide Klassen" gewählt ist,
 // bei gefiltertem Blick auf eine Klasse ist er überflüssig.
 function classChipHtml(c) {
-  if (activeClassId) return "";
+  // "Gemeinsam" gilt für beide Klassen und soll deshalb immer erkennbar sein
+  // — auch im gefilterten Blick auf eine einzelne Klasse, wo man sonst nicht
+  // sehen könnte, dass ein Eintrag auch die jeweils andere Klasse betrifft.
   if (!c.class_id) return `<span class="class-chip shared">🏫 Gemeinsam</span>`;
+  // Die eigene Klasse ist im gefilterten Blick durch den Filter selbst schon
+  // klar — der Chip wäre dort überflüssig, nur bei "Beide Klassen" hilfreich.
+  if (activeClassId) return "";
   const cls = classesList.find((x) => x.id === c.class_id);
   if (!cls) return "";
   return `<span class="class-chip">${CLASS_ICON[cls.slug] || ""} ${esc(cls.name)}</span>`;
@@ -760,7 +815,8 @@ function linkedBackChipHtml(c) {
 function renderLinkedSection(c, inTrash) {
   if (c.type !== "termin" || inTrash) return "";
   const linked = cards.filter((x) => x.parent_id === c.id && !x.trashed_at);
-  const addBtn = `<button type="button" class="btn small link" data-action="add-linked" data-card="${c.id}">+ Element hier verknüpfen</button>`;
+  const addBtn = classLocked ? "" :
+    `<button type="button" class="btn small link" data-action="add-linked" data-card="${c.id}">+ Element hier verknüpfen</button>`;
   const items = linked.map((x) => renderCard(x, { nested: true })).join("");
 
   return `
@@ -857,10 +913,22 @@ const EMPTY_TEXT = {
   papierkorb: "Der Papierkorb ist leer.",
 };
 
+// Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint — knapp
+// oberhalb der Höhe, ab der die Rubrik-Kacheln (jetzt nicht mehr sticky)
+// aus dem sichtbaren Bereich gescrollt sind.
+const SCROLL_TOP_THRESHOLD = 320;
+
+function updateScrollTopButton() {
+  if (!elScrollTopBtn) return;
+  const show = view === "feed" && window.scrollY > SCROLL_TOP_THRESHOLD;
+  elScrollTopBtn.hidden = !show;
+}
+
 function render() {
   document.querySelectorAll("#viewTabs button").forEach((b) =>
     b.classList.toggle("active", b.dataset.view === view));
-  elFab.style.display = view === "feed" && configured ? "" : "none";
+  elFab.style.display = view === "feed" && configured && !classLocked ? "" : "none";
+  updateScrollTopButton();
 
   if (!loaded) return;
   const list = visibleCards();
@@ -868,7 +936,7 @@ function render() {
   if (view === "feed") {
     elFeed.innerHTML = renderGroupedFeed(list);
   } else if (view === "papierkorb") {
-    const toolbar = list.length
+    const toolbar = list.length && !classLocked
       ? `<div class="feed-toolbar">
            <button class="btn link danger" data-action="empty-trash">Papierkorb jetzt leeren</button>
          </div>`
@@ -971,8 +1039,13 @@ function richEditorFieldHtml(card, label) {
 
 function editorFieldsHtml(type, card) {
   const v = (name) => esc(card ? card[name] ?? "" : "");
+  const creatorDefault = card
+    ? (card.creator_name || "")
+    : (localStorage.getItem(CREATOR_NAME_KEY) || "");
   let html = fieldHtml("Titel *",
     `<input type="text" name="title" maxlength="120" required value="${v("title")}">`);
+  html += fieldHtml("Dein Name bzw. deine Funktion * (z. B. „Frau Müller, Lehrkraft“)",
+    `<input type="text" name="creator_name" maxlength="80" required value="${esc(creatorDefault)}">`);
 
   if (type === "termin") {
     html += fieldHtml("Datum *",
@@ -1032,7 +1105,10 @@ function editorFieldsHtml(type, card) {
       </label>`;
   }
   if (type === "umfrage" && card) {
-    html += `<p class="field-hint">Die Optionen einer laufenden Umfrage können nicht mehr geändert werden, damit keine Stimmen verfälscht werden.</p>`;
+    html += `<span class="field" style="margin-bottom:4px"><span style="font-size:.85rem;font-weight:600;color:var(--muted)">Optionen</span></span>
+      <div class="edit-items" id="editOptions"></div>
+      <button type="button" class="btn small" id="editOptionAdd">+ Option hinzufügen</button>
+      <p class="field-hint" style="margin-top:8px">Achtung: Beim Umbenennen bleiben abgegebene Stimmen erhalten, beim Löschen einer Option gehen ihre Stimmen verloren. Es müssen mindestens 2 Optionen übrig bleiben.</p>`;
   }
 
   if (type === "datei" && !card) {
@@ -1050,12 +1126,6 @@ function editorFieldsHtml(type, card) {
 
   html += fieldHtml("Endet am (optional)",
     `<input type="date" name="end_date" value="${card && card.end_date ? esc(card.end_date) : ""}">`);
-
-  html += `
-    <label class="field-check">
-      <input type="checkbox" name="important" ${card && card.important ? "checked" : ""}>
-      <span>★ Wichtig (erscheint oben im Dashboard)</span>
-    </label>`;
 
   html += `
     <label class="field-check">
@@ -1078,6 +1148,18 @@ function renderEditItems() {
     .join("");
 }
 
+function renderEditOptions() {
+  const wrap = $("editOptions");
+  if (!wrap) return;
+  wrap.innerHTML = editorState.options
+    .map((op, idx) => op.deleted ? "" : `
+      <div class="edit-item">
+        <input type="text" maxlength="200" data-idx="${idx}" value="${esc(op.label)}">
+        <button type="button" class="icon-btn" data-remove="${idx}" title="Option löschen">✕</button>
+      </div>`)
+    .join("");
+}
+
 function openEditor(type, card = null, parentId = null) {
   editorState = {
     mode: card ? "edit" : "create",
@@ -1086,6 +1168,9 @@ function openEditor(type, card = null, parentId = null) {
     parentId,   // nur beim Anlegen gesetzt: Termin, mit dem verknüpft wird
     items: card && type === "liste"
       ? (card.list_items || []).map((it) => ({ id: it.id, text: it.text, orig: it.text, deleted: false }))
+      : [],
+    options: card && type === "umfrage"
+      ? (card.poll_options || []).map((o) => ({ id: o.id, label: o.label, orig: o.label, deleted: false }))
       : [],
     attachments: [],   // neu hochgeladene Anhänge dieser Sitzung (Hinweis/Termin)
   };
@@ -1116,6 +1201,27 @@ function openEditor(type, card = null, parentId = null) {
       if (!btn) return;
       editorState.items[btn.dataset.remove].deleted = true;
       renderEditItems();
+    });
+  }
+
+  renderEditOptions();
+  const addOptBtn = $("editOptionAdd");
+  if (addOptBtn) {
+    addOptBtn.addEventListener("click", () => {
+      editorState.options.push({ id: null, label: "", orig: null, deleted: false });
+      renderEditOptions();
+      const inputs = $("editOptions").querySelectorAll("input");
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    });
+    $("editOptions").addEventListener("input", (ev) => {
+      const idx = ev.target.dataset.idx;
+      if (idx !== undefined) editorState.options[idx].label = ev.target.value;
+    });
+    $("editOptions").addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-remove]");
+      if (!btn) return;
+      editorState.options[btn.dataset.remove].deleted = true;
+      renderEditOptions();
     });
   }
 
@@ -1298,9 +1404,13 @@ async function submitEditor() {
   const st = editorState;
   const title = String(fd.get("title") || "").trim();
   if (!title) return editorFail("Bitte einen Titel eingeben.");
+  const creatorName = String(fd.get("creator_name") || "").trim();
+  if (!creatorName) return editorFail("Bitte deinen Namen bzw. deine Funktion angeben.");
+  localStorage.setItem(CREATOR_NAME_KEY, creatorName);
 
   const common = {
     title,
+    creator_name: creatorName,
     body: String(fd.get("body") || "").trim(),
     pinned: fd.get("pinned") === "on",
     important: fd.get("important") === "on",
@@ -1379,6 +1489,14 @@ async function submitEditor() {
       if ((st.type === "hinweis" || st.type === "termin") && st.attachments.length) {
         p.attachments = st.attachments;
       }
+      if (st.type === "umfrage") {
+        // So viele Optionen blieben nach dem Speichern übrig: bestehende
+        // (nicht gelöschte) zählen immer, auch wenn ihr Text geleert wurde
+        // (das bleibt dann unverändert, wie beim Umbenennen von Listen-
+        // Einträgen) — neue Zeilen nur, wenn sie tatsächlich beschriftet sind.
+        const remaining = st.options.filter((o) => !o.deleted && (o.id || o.label.trim())).length;
+        if (remaining < 2) return editorFail("Eine Umfrage braucht mindestens 2 Optionen.");
+      }
       await rpc("update_card", { p_id: st.card.id, p });
 
       if (st.type === "liste") {
@@ -1390,6 +1508,31 @@ async function submitEditor() {
             await rpc("update_list_item", { p_item_id: it.id, p_text: text });
           } else if (!it.id && !it.deleted && text) {
             await rpc("add_list_item", { p_card_id: st.card.id, p_text: text, p_preset: true });
+          }
+        }
+      }
+
+      if (st.type === "umfrage") {
+        // Erst neue Optionen anlegen, dann umbenennen, zuletzt löschen —
+        // in dieser Reihenfolge unterschreitet die Anzahl Optionen in der
+        // Datenbank nie kurzzeitig die Mindestgrenze von 2 (die jede
+        // einzelne delete_poll_option-Aufruf serverseitig prüft), selbst
+        // wenn z. B. eine Option ersetzt statt nur umbenannt wird.
+        for (const op of st.options) {
+          const label = op.label.trim();
+          if (!op.id && !op.deleted && label) {
+            await rpc("add_poll_option", { p_card_id: st.card.id, p_label: label });
+          }
+        }
+        for (const op of st.options) {
+          const label = op.label.trim();
+          if (op.id && !op.deleted && label && label !== op.orig) {
+            await rpc("update_poll_option", { p_option_id: op.id, p_label: label });
+          }
+        }
+        for (const op of st.options) {
+          if (op.id && op.deleted) {
+            await rpc("delete_poll_option", { p_option_id: op.id });
           }
         }
       }
@@ -1420,10 +1563,20 @@ async function doAction(fn, successMsg) {
   }
 }
 
+// Aktionen, die nur über den Hauptlink (nicht per Klassen-Link) verfügbar
+// sind — Karten anlegen/bearbeiten/löschen/anpinnen sowie Papierkorb-
+// Aktionen. Zusätzlich zur Oberfläche (die diese Buttons bei classLocked
+// gar nicht erst rendert) hier nochmal geprüft, falls doch mal ein Klick
+// durchkommt (z. B. nach einem Reload mit veraltetem DOM-Zustand).
+const ADMIN_NUR_HAUPTLINK = new Set([
+  "edit", "pin", "trash", "restore", "delete-forever", "add-linked", "empty-trash",
+]);
+
 async function handleFeedClick(ev) {
   const btn = ev.target.closest("[data-action]");
   if (!btn) return;
   const action = btn.dataset.action;
+  if (classLocked && ADMIN_NUR_HAUPTLINK.has(action)) return;
   const menu = btn.closest("details.menu");
   if (menu) menu.removeAttribute("open");
 
@@ -1734,6 +1887,14 @@ async function init() {
 
   // Neu erstellen
   elFab.addEventListener("click", () => { pendingParentId = null; dlgType.showModal(); });
+
+  if (elScrollTopBtn) {
+    elScrollTopBtn.innerHTML = ICONS.arrowUp;
+    elScrollTopBtn.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    window.addEventListener("scroll", updateScrollTopButton, { passive: true });
+  }
   dlgType.addEventListener("click", (ev) => {
     if (ev.target.closest("[data-close]")) { pendingParentId = null; return dlgType.close(); }
     const btn = ev.target.closest("[data-type]");

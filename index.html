@@ -24,15 +24,17 @@
 
 <header class="topbar">
   <div class="topbar-inner">
-    <h1 id="brandTitle">🐿️ Eichhörnchenklasse</h1>
+    <div class="brand-row">
+      <h1 id="brandTitle">🐿️ Eichhörnchenklasse</h1>
+      <button id="pushBell" class="push-bell" type="button" title="Benachrichtigungen aktivieren" aria-label="Benachrichtigungen aktivieren" hidden></button>
+    </div>
     <select id="classSelect" class="class-select" aria-label="Klasse wählen"></select>
     <nav class="views" id="viewTabs" aria-label="Ansicht">
-      <button data-view="dashboard">Dashboard</button>
+      <button data-view="dashboard" hidden>Dashboard</button>
       <button data-view="feed" class="active">Pinnwand</button>
       <button data-view="archiv">Archiv</button>
       <button data-view="papierkorb">Papierkorb</button>
     </nav>
-    <button id="pushBell" class="push-bell" type="button" title="Benachrichtigungen aktivieren" aria-label="Benachrichtigungen aktivieren" hidden></button>
   </div>
 </header>
 
@@ -43,6 +45,7 @@
 </main>
 
 <button id="fab" class="fab" title="Neuen Eintrag erstellen" aria-label="Neuen Eintrag erstellen">+</button>
+<button id="scrollTopBtn" class="scroll-top-btn" title="Nach oben zu den Rubriken" aria-label="Nach oben zu den Rubriken" hidden></button>
 
 <!-- Schritt 1: Was möchtest du erstellen? -->
 <dialog id="dlgType" class="dlg">

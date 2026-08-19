@@ -30,6 +30,7 @@
   --c-tabelle: #2f7a89;
   --c-umfrage: #6b5b95;
   --c-datei:   #46728e;
+  --line-strong: #d8cbb0;
 }
 
 * { box-sizing: border-box; }
@@ -79,6 +80,14 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
   letter-spacing: -.02em;
 }
 
+/* Hält Titel und Push-Glocke als ein Grüppchen zusammen, statt dass die
+   Glocke von "justify-content: space-between" ganz an den Rand gezogen wird. */
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Klassenwahl (Eichhörnchen/Schmetterling/Beide) — rein clientseitiger
    Anzeigefilter, kein echter Zugriffsschutz (siehe plan-mehrklassen-dashboard.md). */
 .class-select {
@@ -91,6 +100,15 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
   padding: 6px 10px;
   border-radius: 999px;
   cursor: pointer;
+}
+/* Über einen Klassen-Link geöffnet: fest auf eine Klasse gesperrt (siehe
+   applyClassLink in app.js) — bewusst weiterhin gut lesbar statt komplett
+   ausgegraut, nur ohne Dropdown-Pfeil-Cursor. */
+.class-select:disabled {
+  opacity: 1;
+  color: var(--ink);
+  cursor: default;
+  appearance: none;
 }
 
 .views { display: flex; gap: 2px; background: var(--bg); padding: 3px; border-radius: 999px; }
@@ -179,28 +197,17 @@ main {
   font-weight: 600;
 }
 
-/* Farbige Kacheln im Raster (2 Spalten) — bleiben immer alle fest an ihrem
-   Platz stehen. Antippen öffnet darunter, unter dem ganzen Raster, den
-   Inhalt der gewählten Rubrik (siehe .rubrik-panel weiter unten). Das
-   Raster selbst klebt beim Scrollen direkt unter der Kopfzeile fest, nur
-   der Inhalt darunter läuft mit der Seite mit — daher auch der deckende
-   Hintergrund, sonst würde durchscrollender Inhalt in den Fugen
-   durchscheinen. */
+/* Farbige Kacheln im Raster (2 Spalten). Antippen öffnet darunter, unter
+   dem ganzen Raster, den Inhalt der gewählten Rubrik (siehe .rubrik-panel
+   weiter unten). Scrollt bewusst normal mit der Seite mit (nicht mehr
+   sticky), damit auf dem Handy mehr Platz für den eigentlichen Inhalt
+   bleibt — der "Nach oben"-Button (siehe .scroll-top-btn) bringt die
+   Kacheln bei Bedarf wieder in Sicht. */
 .rubrik-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-bottom: 16px;
-  position: sticky;
-  top: 58px;
-  z-index: 10;
-  background: var(--bg);
-  padding: 8px 0 12px;
-  margin-top: -8px;
-  /* Deutliche "Kante" zum scrollenden Inhalt darunter, damit die fest
-     stehenden Kacheln beim Scrollen klar vom durchlaufenden Panel getrennt
-     bleiben und nichts optisch ineinanderläuft. */
-  box-shadow: 0 16px 20px -18px rgba(38, 28, 12, .55);
 }
 
 .rubrik-tile {
@@ -326,16 +333,20 @@ main {
   padding: 2px 9px;
 }
 
-.group-body > .card {
-  border-top: 1px solid var(--line-soft);
-  border-right: none;
-  border-bottom: none;
-  border-radius: 0;
-  box-shadow: none;
-  margin: 0;
+.group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  background: var(--bg);
 }
-.group-body > .card:first-child { border-top: none; }
-.group-body > .card:hover { box-shadow: none; background: #fefefd; }
+
+.group-body > .card {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  border-color: var(--line-strong);
+}
+.group-body > .card:hover { box-shadow: var(--shadow-lg); }
 
 .rubrik-panel-empty {
   margin: 0;
@@ -820,6 +831,35 @@ main {
 
 @media (min-width: 760px) {
   .fab { right: calc(50% - 360px - 80px); }
+}
+
+/* Erscheint erst nach etwas Scroll-Distanz im Pinnwand-Tab (siehe
+   updateScrollTopButton in app.js) — bringt die Rubrik-Kacheln, die beim
+   Scrollen jetzt mit durchlaufen statt fest zu kleben, bei Bedarf wieder
+   in Sicht. */
+.scroll-top-btn {
+  position: fixed;
+  left: 20px;
+  bottom: 24px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  z-index: 30;
+  transition: transform .15s ease, background .15s ease;
+}
+.scroll-top-btn svg { width: 20px; height: 20px; display: block; }
+.scroll-top-btn:hover { background: var(--bg); transform: translateY(-2px); }
+
+@media (min-width: 760px) {
+  .scroll-top-btn { left: calc(50% - 360px - 80px); }
 }
 
 /* ---------- Dialoge ---------- */
