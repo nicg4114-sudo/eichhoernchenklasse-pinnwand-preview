@@ -3,6 +3,44 @@
    Funktional und aufgeräumt, mobile-first.
    ============================================================ */
 
+/* Figtree lokal eingebunden (app/fonts/) statt über Google Fonts — kein
+   externer Aufruf mehr beim Laden der Seite. */
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/figtree-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/figtree-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/figtree-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/figtree-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("fonts/figtree-800.woff2") format("woff2");
+}
+
 :root {
   --bg:        #f6f3ee;
   --card:      #ffffff;
@@ -30,7 +68,22 @@
   --c-tabelle: #2f7a89;
   --c-umfrage: #6b5b95;
   --c-datei:   #46728e;
+  /* Kachel-Rubrik "Beteiligung" (Umfrage/Liste/Tabelle zusammengefasst) —
+     eigene Farbe, damit sie nicht wie eine der drei Einzelfarben wirkt. */
+  --c-beteiligung: #7c5980;
   --line-strong: #d8cbb0;
+  --bottom-nav-h: 60px;
+}
+
+/* Zartblaues Design für Besucher, die über den Schmetterlingsklasse-Link
+   gekommen sind (siehe applyClassTheme in app.js) — ersetzt nur den
+   allgemeinen Akzent (Buttons, Plus-Button, Links, Fokus-Ringe), nicht die
+   funktionalen Typ-Farben einzelner Kartenarten (Termin/Liste/etc.), die
+   weiterhin unverändert zur Unterscheidung dienen. */
+:root.theme-schmetterling {
+  --accent:    #4d80ad;
+  --accent-dk: #3a6389;
+  --accent-bg: #e8f1f8;
 }
 
 * { box-sizing: border-box; }
@@ -111,23 +164,6 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
   appearance: none;
 }
 
-.views { display: flex; gap: 2px; background: var(--bg); padding: 3px; border-radius: 999px; }
-
-.views button {
-  border: none;
-  background: none;
-  padding: 7px 14px;
-  border-radius: 999px;
-  cursor: pointer;
-  color: var(--muted);
-  font-size: .9rem;
-  font-weight: 600;
-  transition: background .15s ease, color .15s ease;
-}
-
-.views button:hover { color: var(--ink); }
-.views button.active { color: #fff; background: var(--ink); }
-
 /* Glocke für Push-Benachrichtigungen — standardmäßig ausgeblendet (per JS
    nur gezeigt, wenn der Browser Push überhaupt unterstützt), gefüllt/farbig
    sobald ein Abo aktiv ist. */
@@ -149,12 +185,28 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
 .push-bell:hover { color: var(--ink); }
 .push-bell.active { background: var(--accent); color: #fff; }
 
+/* Version-Tab in der Fußleiste — Punkt oben rechts am Icon, sobald es eine
+   ungesehene Neuerung gibt (siehe checkForNewVersion in app.js). */
+#versionBtn::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: calc(50% - 15px);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--card);
+  display: none;
+}
+#versionBtn.has-update::after { display: block; }
+
 /* ---------- Hauptbereich ---------- */
 
 main {
   max-width: 720px;
   margin: 0 auto;
-  padding: 20px 14px 120px;
+  padding: 20px 14px calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 24px);
 }
 
 .notice {
@@ -229,12 +281,10 @@ main {
 .rubrik-tile:hover { box-shadow: var(--shadow-lg); }
 .rubrik-tile.active { box-shadow: 0 0 0 3px var(--ink), var(--shadow-lg); }
 
-.rubrik-tile.type-hinweis { background: var(--c-hinweis); }
-.rubrik-tile.type-termin  { background: var(--c-termin); }
-.rubrik-tile.type-liste   { background: var(--c-liste); }
-.rubrik-tile.type-tabelle { background: var(--c-tabelle); }
-.rubrik-tile.type-umfrage { background: var(--c-umfrage); }
-.rubrik-tile.type-datei   { background: var(--c-datei); }
+.rubrik-tile.type-hinweis     { background: var(--c-hinweis); }
+.rubrik-tile.type-termin      { background: var(--c-termin); }
+.rubrik-tile.type-beteiligung { background: var(--c-beteiligung); }
+.rubrik-tile.type-datei       { background: var(--c-datei); }
 
 .rubrik-tile-icon {
   display: flex;
@@ -311,12 +361,10 @@ main {
   padding: 14px 16px;
   color: #fff;
 }
-.rubrik-panel-head.type-hinweis { background: var(--c-hinweis); }
-.rubrik-panel-head.type-termin  { background: var(--c-termin); }
-.rubrik-panel-head.type-liste   { background: var(--c-liste); }
-.rubrik-panel-head.type-tabelle { background: var(--c-tabelle); }
-.rubrik-panel-head.type-umfrage { background: var(--c-umfrage); }
-.rubrik-panel-head.type-datei   { background: var(--c-datei); }
+.rubrik-panel-head.type-hinweis     { background: var(--c-hinweis); }
+.rubrik-panel-head.type-termin      { background: var(--c-termin); }
+.rubrik-panel-head.type-beteiligung { background: var(--c-beteiligung); }
+.rubrik-panel-head.type-datei       { background: var(--c-datei); }
 
 .rubrik-panel-head .rubrik-tile-icon { background: rgba(255, 255, 255, .22); }
 .rubrik-panel-head .group-label { color: #fff; }
@@ -355,6 +403,136 @@ main {
   color: var(--muted);
   font-size: .92rem;
 }
+
+/* ---------- Termin-Rubrik: 2-Spalten-Raster zum Aufklappen ---------- */
+
+/* Kompakte Kacheln für alle Termine (siehe renderTerminGroupBody) — Antippen
+   klappt darunter die volle Karte auf (normale, dezente Kartenoptik statt
+   einer knalligen Sonderfarbe). */
+.termin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.termin-tile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: border-color .15s ease, background .15s ease;
+}
+.termin-tile:hover { border-color: var(--c-termin); }
+.termin-tile.active { border-color: var(--c-termin); background: var(--accent-bg); }
+
+.termin-tile-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  flex: 0 0 auto;
+  line-height: 1.15;
+}
+.termin-tile-date b { font-size: .92rem; color: var(--c-termin); }
+.termin-tile-date span { font-size: .6rem; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+
+.termin-tile-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.termin-tile-title {
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.termin-tile-rel { font-size: .68rem; color: var(--muted); }
+
+/* ---------- Hinweis-Rubrik: Kurznachrichten-Feed ---------- */
+
+.kurz-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.kurz-bubble {
+  background: var(--accent-bg);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+}
+.kurz-bubble-head { display: flex; align-items: center; gap: 8px; }
+.kurz-bubble-head b { font-size: .92rem; }
+.kurz-bubble-body { font-size: .9rem; margin-top: 2px; }
+.kurz-bubble-body :first-child { margin-top: 0; }
+.kurz-bubble-body :last-child { margin-bottom: 0; }
+.kurz-bubble-meta { font-size: .74rem; color: var(--muted); margin-top: 4px; }
+
+/* ---------- Ordner-Unterseite (Rubrik "Datei", siehe renderFolderView) ---------- */
+
+.dateien-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.back-btn { display: inline-flex; align-items: center; gap: 6px; }
+.back-btn svg { width: 15px; height: 15px; }
+
+.folder-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.folder-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  box-shadow: var(--shadow);
+  transition: box-shadow .15s ease, border-color .15s ease;
+}
+.folder-tile:hover { box-shadow: var(--shadow-lg); }
+.folder-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--accent-bg);
+  color: var(--accent-dk);
+}
+.folder-tile-icon svg { width: 16px; height: 16px; }
+.folder-tile-label { font-weight: 800; font-size: .9rem; }
+.folder-tile-count { font-size: .78rem; color: var(--muted); font-weight: 600; }
+.folder-tile .rubrik-tile-new { color: #fff; background: var(--accent); }
+
+.folder-tile-new {
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  color: var(--muted);
+}
+.folder-tile-new .folder-tile-icon { background: var(--bg); color: var(--muted); font-size: 1.2rem; font-weight: 800; }
 
 /* ---------- Karten ---------- */
 
@@ -808,39 +986,76 @@ main {
 .btn.link.danger { color: var(--danger); }
 .btn[disabled] { opacity: .55; cursor: wait; }
 
-/* ---------- Plus-Button ---------- */
+/* ---------- Fußleiste (Navigation) + Plus-Button ---------- */
+
+/* Ersetzt das frühere ☰-Menü: feste Leiste unten mit den Ansichten
+   (Pinnwand/Archiv/Papierkorb), dem Version-Tab und dem Plus-Button
+   mittig darüber — mit dem Daumen leichter erreichbar. */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  height: var(--bottom-nav-h);
+  padding: 0 6px calc(env(safe-area-inset-bottom));
+  background: var(--card);
+  border-top: 1px solid var(--line);
+}
+
+.bn-btn {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 100%;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .15s ease;
+}
+.bn-btn svg { width: 20px; height: 20px; }
+.bn-label { font-size: .66rem; font-weight: 600; }
+.bn-btn:hover { color: var(--ink); }
+.bn-btn.active { color: var(--accent); }
+
+.bn-gap { flex: 1 1 0; }
 
 .fab {
-  position: fixed;
-  right: 20px;
-  bottom: 24px;
-  width: 58px;
-  height: 58px;
+  position: absolute;
+  left: 50%;
+  top: -20px;
+  transform: translateX(-50%);
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
   border: none;
   background: var(--accent);
   color: #fff;
-  font-size: 2rem;
+  font-size: 1.9rem;
   line-height: 1;
   cursor: pointer;
   box-shadow: 0 8px 22px -4px rgba(177, 85, 42, .55);
-  z-index: 30;
   transition: transform .15s ease, background .15s ease;
 }
-.fab:hover { background: var(--accent-dk); transform: translateY(-2px); }
-
-@media (min-width: 760px) {
-  .fab { right: calc(50% - 360px - 80px); }
-}
+.fab:hover { background: var(--accent-dk); transform: translateX(-50%) translateY(-2px); }
 
 /* Erscheint erst nach etwas Scroll-Distanz im Pinnwand-Tab (siehe
    updateScrollTopButton in app.js) — bringt die Rubrik-Kacheln, die beim
    Scrollen jetzt mit durchlaufen statt fest zu kleben, bei Bedarf wieder
-   in Sicht. */
+   in Sicht. Sitzt über der Fußleiste, nicht dahinter. */
 .scroll-top-btn {
   position: fixed;
   left: 20px;
-  bottom: 24px;
+  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 14px);
   width: 46px;
   height: 46px;
   border-radius: 50%;
@@ -859,7 +1074,7 @@ main {
 .scroll-top-btn:hover { background: var(--bg); transform: translateY(-2px); }
 
 @media (min-width: 760px) {
-  .scroll-top-btn { left: calc(50% - 360px - 80px); }
+  .scroll-top-btn { left: calc(50% - 360px + 20px); }
 }
 
 /* ---------- Dialoge ---------- */
@@ -888,6 +1103,15 @@ main {
 .type-grid button:hover { border-color: var(--accent); background: var(--accent-bg); transform: translateY(-1px); }
 .type-grid b { display: block; margin-bottom: 2px; }
 .type-grid span { font-size: .82rem; color: var(--muted); }
+
+/* Versionshinweise (siehe #dlgVersion) — neueste zuerst, mit Datum. */
+.version-list { max-height: 60vh; overflow-y: auto; }
+.version-entry { padding: 12px 0; border-top: 1px solid var(--line); }
+.version-entry:first-child { border-top: none; padding-top: 0; }
+.version-entry h3 { margin: 0 0 8px; font-size: .95rem; font-weight: 800; color: var(--accent); }
+.version-entry ul { margin: 0; padding-left: 20px; }
+.version-entry li { margin-bottom: 4px; font-size: .92rem; }
+.version-entry li:last-child { margin-bottom: 0; }
 
 .dlg-actions {
   display: flex;

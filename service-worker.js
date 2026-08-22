@@ -7,7 +7,7 @@
 // Anfragen an Supabase (die eigentlichen Pinnwand-Daten) laufen immer direkt
 // übers Netz, damit nie veraltete Inhalte angezeigt werden.
 
-const CACHE_NAME = "pinnwand-shell-v5";
+const CACHE_NAME = "pinnwand-shell-v9";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -15,6 +15,11 @@ const SHELL_FILES = [
   "./app.js",
   "./config.js",
   "./manifest.webmanifest",
+  "./fonts/figtree-400.woff2",
+  "./fonts/figtree-500.woff2",
+  "./fonts/figtree-600.woff2",
+  "./fonts/figtree-700.woff2",
+  "./fonts/figtree-800.woff2",
 ];
 
 self.addEventListener("install", (event) => {
@@ -65,19 +70,27 @@ self.addEventListener("push", (event) => {
       icon: "icon-192.png",
       badge: "icon-192.png",
       tag: data.type || "pinnwand",
-      data: { url: "./" },
+      data: { url: "./index.html" },
     })
   );
 });
 
+// Wichtig: kein exakter URL-Vergleich (scheitert an Trailing Slash,
+// Klassen-Link-Parametern etc. — je nach Gerät unterschiedlich, das war der
+// Bug). Stattdessen: irgendein offenes App-Fenster nehmen, notfalls dorthin
+// navigieren; erst wenn gar keins offen ist, ein neues öffnen.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = new URL(event.notification.data?.url || "./", self.location.href).href;
+  const targetUrl = new URL(event.notification.data?.url || "./index.html", self.location.href).href;
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      const existing = clients.find((c) => c.url === targetUrl);
-      if (existing) return existing.focus();
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if (client.url !== targetUrl && "navigate" in client) {
+          client.navigate(targetUrl).catch(() => {});
+        }
+        if ("focus" in client) return client.focus();
+      }
       return self.clients.openWindow(targetUrl);
     })
   );

@@ -15,9 +15,6 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Pinnwand">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -29,12 +26,6 @@
       <button id="pushBell" class="push-bell" type="button" title="Benachrichtigungen aktivieren" aria-label="Benachrichtigungen aktivieren" hidden></button>
     </div>
     <select id="classSelect" class="class-select" aria-label="Klasse wählen"></select>
-    <nav class="views" id="viewTabs" aria-label="Ansicht">
-      <button data-view="dashboard" hidden>Dashboard</button>
-      <button data-view="feed" class="active">Pinnwand</button>
-      <button data-view="archiv">Archiv</button>
-      <button data-view="papierkorb">Papierkorb</button>
-    </nav>
   </div>
 </header>
 
@@ -44,7 +35,29 @@
   <p id="empty" class="empty" hidden></p>
 </main>
 
-<button id="fab" class="fab" title="Neuen Eintrag erstellen" aria-label="Neuen Eintrag erstellen">+</button>
+<!-- Feste Fußleiste (statt des früheren ☰-Menüs) — Ansichten links/rechts
+     vom Plus-Button, der die Leiste leicht überragt. -->
+<nav class="bottom-nav" id="viewTabs" aria-label="Navigation">
+  <button data-view="dashboard" hidden>Dashboard</button>
+  <button class="bn-btn active" data-view="feed" title="Pinnwand" aria-label="Pinnwand">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="6" height="6" rx="1.2"/><rect x="11" y="3" width="6" height="6" rx="1.2"/><rect x="3" y="11" width="6" height="6" rx="1.2"/><rect x="11" y="11" width="6" height="6" rx="1.2"/></svg>
+    <span class="bn-label">Pinnwand</span>
+  </button>
+  <button class="bn-btn" data-view="archiv" title="Archiv" aria-label="Archiv">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="4" width="14" height="4" rx="1"/><path d="M4.2 8v6.5a1 1 0 0 0 1 1h9.6a1 1 0 0 0 1-1V8"/><line x1="8" y1="11" x2="12" y2="11"/></svg>
+    <span class="bn-label">Archiv</span>
+  </button>
+  <span class="bn-gap" aria-hidden="true"></span>
+  <button class="bn-btn" data-view="papierkorb" title="Papierkorb" aria-label="Papierkorb">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12"/><path d="M8 6V4.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6"/><path d="M5.5 6l.6 9a1 1 0 0 0 1 .9h5.8a1 1 0 0 0 1-.9l.6-9"/><line x1="8.3" y1="9" x2="8.3" y2="13.5"/><line x1="11.7" y1="9" x2="11.7" y2="13.5"/></svg>
+    <span class="bn-label">Papierkorb</span>
+  </button>
+  <button class="bn-btn" id="versionBtn" type="button" title="Version — was ist neu?" aria-label="Version — was ist neu?">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.25"/><path d="M6.6 10.2l2.2 2.2 4.6-4.8"/></svg>
+    <span class="bn-label">Version</span>
+  </button>
+  <button id="fab" class="fab" title="Neuen Eintrag erstellen" aria-label="Neuen Eintrag erstellen">+</button>
+</nav>
 <button id="scrollTopBtn" class="scroll-top-btn" title="Nach oben zu den Rubriken" aria-label="Nach oben zu den Rubriken" hidden></button>
 
 <!-- Schritt 1: Was möchtest du erstellen? -->
@@ -95,6 +108,15 @@
       <button type="submit" class="btn primary">OK</button>
     </div>
   </form>
+</dialog>
+
+<!-- Versionshinweise: erscheint einmalig nach einem Update, oder über den Version-Button -->
+<dialog id="dlgVersion" class="dlg small">
+  <h2>Version</h2>
+  <div id="versionList" class="version-list"></div>
+  <div class="dlg-actions">
+    <button type="button" class="btn primary" data-close>Alles klar</button>
+  </div>
 </dialog>
 
 <div id="toast" class="toast" hidden></div>

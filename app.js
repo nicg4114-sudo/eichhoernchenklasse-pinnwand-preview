@@ -36,27 +36,27 @@ const TYPE_LABELS = {
   datei: "Datei",
 };
 
-// Pluralform für die Kachel-Unterzeile ("3 Termine", "1 Liste", ...).
-const TYPE_LABELS_PLURAL = {
-  hinweis: "Hinweise",
-  termin: "Termine",
-  liste: "Listen",
-  tabelle: "Tabellen",
-  umfrage: "Umfragen",
-  datei: "Dateien",
+// Rubriken für die Kachel-Navigation in der gruppierten Übersicht — bündelt
+// Umfrage/Liste/Tabelle unter "Beteiligung", weil bei allen dreien Eltern
+// aktiv etwas eintragen/ankreuzen statt nur zu lesen. Jede Karte behält
+// ihren echten Typ für Badge/Farbe/Erstellen-Dialog (siehe TYPE_LABELS).
+const RUBRIK_ORDER = ["hinweis", "termin", "beteiligung", "datei"];
+const RUBRIK_TYPES = {
+  hinweis: ["hinweis"],
+  termin: ["termin"],
+  beteiligung: ["umfrage", "liste", "tabelle"],
+  datei: ["datei"],
 };
-
-// Reihenfolge der Abschnitte in der gruppierten Übersicht.
-const TYPE_ORDER = ["hinweis", "termin", "liste", "tabelle", "umfrage", "datei"];
+const RUBRIK_KEY_BY_TYPE = Object.fromEntries(
+  Object.entries(RUBRIK_TYPES).flatMap(([rubrik, types]) => types.map((t) => [t, rubrik])));
+const RUBRIK_LABEL = { hinweis: "Hinweis", termin: "Termin", beteiligung: "Beteiligung", datei: "Datei" };
+const RUBRIK_LABEL_PLURAL = { hinweis: "Hinweise", termin: "Termine", beteiligung: "Beteiligungen", datei: "Dateien" };
 
 // Kleines, einheitliches Icon-Set (ersetzt Emojis für ein ruhigeres Bild).
 const ICONS = {
   arrowUp: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="15.5" x2="10" y2="4.5"/><polyline points="5,9.5 10,4.5 15,9.5"/></svg>`,
   hinweis: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7.25"/><line x1="10" y1="9" x2="10" y2="14"/><circle cx="10" cy="6.3" r="0.9" fill="currentColor" stroke="none"/></svg>`,
   termin: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4.2" width="14" height="12" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="6.5" y1="2.5" x2="6.5" y2="5.5"/><line x1="13.5" y1="2.5" x2="13.5" y2="5.5"/></svg>`,
-  liste: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 5.5l1.3 1.3 2-2.3"/><line x1="8.5" y1="5.5" x2="17" y2="5.5"/><line x1="3.2" y1="10" x2="17" y2="10"/><line x1="3.2" y1="14.5" x2="17" y2="14.5"/></svg>`,
-  tabelle: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3.5" width="14" height="13" rx="1.5"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="3" y1="12.3" x2="17" y2="12.3"/><line x1="9.7" y1="3.5" x2="9.7" y2="16.5"/></svg>`,
-  umfrage: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="5" y1="15.5" x2="5" y2="11"/><line x1="10" y1="15.5" x2="10" y2="6.5"/><line x1="15" y1="15.5" x2="15" y2="9"/></svg>`,
   datei: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 2.8h6l3 3v10.4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.8a1 1 0 0 1 1-1z"/><path d="M12 2.8v3h3"/></svg>`,
   image: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3.5" width="14" height="13" rx="1.8"/><circle cx="7.3" cy="8" r="1.4"/><path d="M3.8 14.5l4-4.3 2.6 2.6 2.4-3 3.4 4.7"/></svg>`,
   link: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8.3 11.7a3 3 0 0 0 4.5.3l1.8-1.8a3 3 0 0 0-4.3-4.3l-1 1"/><path d="M11.7 8.3a3 3 0 0 0-4.5-.3L5.4 9.8a3 3 0 0 0 4.3 4.3l1-1"/></svg>`,
@@ -64,14 +64,61 @@ const ICONS = {
   pin: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 17.5s6-5.6 6-10a6 6 0 1 0-12 0c0 4.4 6 10 6 10z"/><circle cx="10" cy="7.4" r="2.1"/></svg>`,
   chevron: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 4.5l6 5.5-6 5.5"/></svg>`,
   bell: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8a5 5 0 0 1 10 0c0 3.2 1 4.3 1.4 4.8H3.6C4 12.3 5 11.2 5 8z"/><path d="M8.2 15.5a1.8 1.8 0 0 0 3.5 0"/></svg>`,
+  arrowLeft: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="12,4.5 6,10 12,15.5"/></svg>`,
+  folder: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2.8 5.3a1 1 0 0 1 1-1h3.6l1.4 1.7h6.4a1 1 0 0 1 1 1v7.3a1 1 0 0 1-1 1H3.8a1 1 0 0 1-1-1z"/></svg>`,
+  beteiligung: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.25"/><path d="M6.6 10.2l2.2 2.2 4.6-4.8"/></svg>`,
 };
+
+// Icons je Kachel-Rubrik (siehe RUBRIK_ORDER) — "Beteiligung" bündelt drei
+// echte Kartentypen (Umfrage/Liste/Tabelle) unter einem gemeinsamen Icon.
+const RUBRIK_ICON = { hinweis: ICONS.hinweis, termin: ICONS.termin, beteiligung: ICONS.beteiligung, datei: ICONS.datei };
+
+/* ---------- Versionshinweise ---------- */
+
+// Neueste zuerst. Für jedes Update ein Eintrag mit Datum und kurzen,
+// elternfreundlichen Stichpunkten — erscheint einmalig automatisch, wenn
+// sich seit dem letzten Besuch etwas geändert hat (siehe checkForNewVersion).
+const VERSIONS = [
+  {
+    version: "22.08.2026",
+    items: [
+      "Neu: Ordner in der Datei-Rubrik — Dateien lassen sich jetzt in Ordnern sammeln.",
+      "Neu: jede Karte zeigt jetzt auch, wann und von wem sie zuletzt bearbeitet wurde.",
+      "Neu: dieses Versions-Fenster — zeigt nach einem Update kurz, was sich geändert hat.",
+      "Feste Leiste unten (Pinnwand/Archiv/Papierkorb/Version) statt Menü oben rechts — mit dem Daumen leichter erreichbar.",
+      "Push-Benachrichtigungen öffnen jetzt zuverlässiger die App beim Antippen.",
+      "Neu: Dateien lassen sich per „In Ordner verschieben\" direkt umsortieren.",
+      "Neu: die Termin-Rubrik zeigt jetzt ein übersichtliches 2-Spalten-Raster — antippen klappt die Details auf.",
+      "Neu: Kurznachrichten — Hinweise lassen sich als kompakter Chat-Feed oben in der Hinweis-Rubrik anzeigen.",
+      "Umfrage, Liste und Tabelle laufen jetzt zusammen unter der neuen Rubrik „Beteiligung\".",
+      "Neu: Einträge jeder Art lassen sich jetzt manuell ins Archiv verschieben und wieder zurückholen.",
+      "Neu: eigenes, zartblaues Design für alle, die über den Schmetterlingsklasse-Link kommen.",
+    ],
+  },
+  {
+    version: "19.08.2026",
+    items: [
+      "Wer über einen Klassen-Link kommt, kann jetzt nur noch bei Umfragen, Listen und Tabellen mitmachen — neue Karten anlegen bleibt der Lehrkraft bzw. dem Hauptlink vorbehalten.",
+      "Jede Karte zeigt jetzt an, von wem sie erstellt wurde.",
+      "Beim Scrollen verschwinden die Rubriken-Kacheln, ein Pfeil-Button bringt wieder nach oben.",
+    ],
+  },
+];
 
 /* ---------- Zustand ---------- */
 
 let cards = [];
-let view = "feed";        // dashboard | feed | archiv | papierkorb
+let view = "feed";        // dashboard | feed | archiv | papierkorb | dateien
 let loaded = false;
 let classesList = [];     // aus DB geladen: [{id, slug, name}, ...]
+let foldersList = [];     // aus DB geladen: [{id, class_id, name, created_by}, ...]
+// Ordner-Unterseite (Rubrik "Datei", siehe renderFolderView): undefined =
+// Ordner-Raster, "" = Inhalt von "Ohne Ordner", sonst eine Ordner-Id.
+let openFolderId;
+// Welcher Termin im Termin-Raster gerade aufgeklappt ist (siehe
+// renderTerminGroupBody) — undefined = noch keiner gewählt, fällt dann auf
+// den zeitlich nächsten zurück.
+let openTerminId;
 
 // Welche Klasse gerade "meine" ist — rein clientseitiger Anzeigefilter,
 // kein echter Zugriffsschutz (der kommt später mit Einmal-Codes, siehe
@@ -85,6 +132,20 @@ let activeClassId = localStorage.getItem(CLASS_KEY) || "";
 // in beiden Klassen, oder die Lehrkraft), behält die volle Auswahl.
 const CLASS_LOCK_KEY = "pinnwand_klasse_gesperrt";
 let classLocked = localStorage.getItem(CLASS_LOCK_KEY) === "1";
+// Merkt sich, über welchen Klassen-Link gesperrt wurde, damit das
+// zartblaue Schmetterlings-Design (siehe applyClassTheme) schon beim
+// Laden gesetzt werden kann, ohne auf die asynchron geladene Klassenliste
+// warten zu müssen (sonst kurzes Aufblitzen der falschen Farbe).
+const CLASS_SLUG_KEY = "pinnwand_klasse_slug";
+function applyClassTheme(slug) {
+  const isSchmetterling = slug === "schmetterling";
+  document.documentElement.classList.toggle("theme-schmetterling", isSchmetterling);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = isSchmetterling ? "#4d80ad" : "#b1552a";
+}
+if (classLocked && localStorage.getItem(CLASS_SLUG_KEY) === "schmetterling") {
+  applyClassTheme("schmetterling");
+}
 // Merkt sich den zuletzt eingetragenen Ersteller-Namen als Vorschlag für die
 // nächste neue Karte (Lehrkraft/Elternsprecher legen meist mehrere Karten
 // hintereinander an und müssten sonst jedes Mal neu tippen).
@@ -109,6 +170,9 @@ const deviceToken = (() => {
 // (localStorage), keine Anmeldung nötig, genau wie deviceToken oben.
 const SEEN_KEY = "pinnwand_gesehen";
 const OPEN_KEY = "pinnwand_offene_kategorien";
+
+// Zuletzt gesehene Version (siehe VERSIONS oben und checkForNewVersion).
+const VERSION_SEEN_KEY = "pinnwand_version_gesehen";
 
 function loadSeen() {
   try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || {}; }
@@ -145,10 +209,13 @@ const elFab = $("fab");
 const elScrollTopBtn = $("scrollTopBtn");
 const elClassSelect = $("classSelect");
 const elBrandTitle = $("brandTitle");
+const elViewTabs = $("viewTabs");
 const dlgType = $("dlgType");
 const dlgEditor = $("dlgEditor");
 const dlgConfirm = $("dlgConfirm");
 const dlgPrompt = $("dlgPrompt");
+const dlgVersion = $("dlgVersion");
+const elVersionBtn = $("versionBtn");
 
 /* ---------- Hilfsfunktionen ---------- */
 
@@ -213,6 +280,16 @@ function isPastTermin(c) {
 function isExpired(c) {
   if (isPastTermin(c)) return true;
   return !!c.end_date && parseISODate(c.end_date) < todayStart();
+}
+
+// Manuelles Übersteuern der Archiv-Zugehörigkeit (siehe Migration 015) —
+// "In Archiv verschieben"/"Aus Archiv zurückholen" im Kartenmenü setzt
+// archived_override fest auf true/false, unabhängig vom Datum. null (noch
+// nie manuell verschoben) heißt: automatisch nach Datum (isExpired).
+function isArchived(c) {
+  if (c.archived_override === true) return true;
+  if (c.archived_override === false) return false;
+  return isExpired(c);
 }
 
 // Das für die Archiv-Sortierung relevante "abgelaufen am"-Datum.
@@ -359,7 +436,7 @@ function toast(msg, isError = false) {
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt].some((d) => d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion].some((d) => d.open);
 }
 
 /* ---------- API ---------- */
@@ -396,6 +473,12 @@ async function fetchClasses() {
   return res.json();
 }
 
+async function fetchFolders() {
+  const res = await fetch(`${REST()}/folders?select=*&order=name.asc`, { headers: AUTH() });
+  if (!res.ok) throw await apiError(res);
+  return res.json();
+}
+
 async function loadClasses() {
   try {
     classesList = await fetchClasses();
@@ -419,6 +502,8 @@ function applyClassLink() {
       classLocked = true;
       localStorage.setItem(CLASS_KEY, activeClassId);
       localStorage.setItem(CLASS_LOCK_KEY, "1");
+      localStorage.setItem(CLASS_SLUG_KEY, slug);
+      applyClassTheme(slug);
     }
     history.replaceState(null, "", location.pathname + location.hash);
   }
@@ -493,7 +578,13 @@ async function uploadFile(file) {
 
 async function reload({ silent = false } = {}) {
   try {
-    cards = await fetchCards();
+    // Scheitert das Ordner-Laden (z. B. Migration noch nicht eingespielt),
+    // soll das die Karten selbst nicht mit blockieren.
+    const [cardsData, foldersData] = await Promise.all([
+      fetchCards(), fetchFolders().catch(() => foldersList),
+    ]);
+    cards = cardsData;
+    foldersList = foldersData;
     loaded = true;
     elNotice.hidden = true;
     render();
@@ -517,15 +608,15 @@ function visibleCards() {
   }
   if (view === "archiv") {
     return cards
-      .filter((c) => !c.trashed_at && isExpired(c) && inActiveClass(c))
-      .sort((a, b) => String(expiryDate(b)).localeCompare(String(expiryDate(a))));
+      .filter((c) => !c.trashed_at && isArchived(c) && inActiveClass(c))
+      .sort((a, b) => String(expiryDate(b) || b.created_at).localeCompare(String(expiryDate(a) || a.created_at)));
   }
   if (view === "dashboard") {
     return cards
-      .filter((c) => !c.trashed_at && !isExpired(c) && inActiveClass(c))
+      .filter((c) => !c.trashed_at && !isArchived(c) && inActiveClass(c))
       .sort(dashboardSort);
   }
-  return cards.filter((c) => !c.trashed_at && !isExpired(c) && inActiveClass(c));
+  return cards.filter((c) => !c.trashed_at && !isArchived(c) && inActiveClass(c));
 }
 
 /* ---------- Rendering ---------- */
@@ -728,9 +819,21 @@ function renderCard(c, opts) {
       <button data-action="restore" data-card="${c.id}">Wiederherstellen</button>
       <button class="danger" data-action="delete-forever" data-card="${c.id}">Endgültig löschen</button>`;
   } else {
+    // "Verschieben" nur bei Datei-Karten mit Klassenbezug — gemeinsame
+    // Dateien (beide Klassen) können ohnehin keinem Ordner zugeordnet
+    // werden (siehe update_card).
+    const moveBtn = (c.type === "datei" && c.class_id)
+      ? `<button data-action="move-file" data-card="${c.id}">In Ordner verschieben</button>` : "";
+    // Manuelles Übersteuern der Archiv-Zugehörigkeit (siehe isArchived,
+    // Migration 015) — unabhängig vom Kartentyp und vom Datum.
+    const archiveBtn = isArchived(c)
+      ? `<button data-action="unarchive-card" data-card="${c.id}">Aus Archiv zurückholen</button>`
+      : `<button data-action="archive-card" data-card="${c.id}">In Archiv verschieben</button>`;
     menu = `
       <button data-action="edit" data-card="${c.id}">Bearbeiten</button>
+      ${moveBtn}
       <button data-action="pin" data-card="${c.id}">${c.pinned ? "Nicht mehr anpinnen" : "Oben anpinnen"}</button>
+      ${archiveBtn}
       <button class="danger" data-action="trash" data-card="${c.id}">Löschen</button>`;
   }
 
@@ -759,6 +862,12 @@ function renderCard(c, opts) {
   const endNote = (c.end_date && !inTrash)
     ? ` · Endet am ${esc(fmtDateLong(c.end_date))}` : "";
   const creatorNote = c.creator_name ? ` · von ${esc(c.creator_name)}` : "";
+  // Nur wenn seit dem Anlegen tatsächlich einmal etwas bearbeitet wurde
+  // (siehe update_card in migration-013) — keine rückwirkenden Angaben bei
+  // unveränderten Karten.
+  const editedNote = c.updated_at
+    ? `<div class="card-meta">Zuletzt geändert: ${fmtTimestamp(c.updated_at)}${c.last_edited_by ? ` · von ${esc(c.last_edited_by)}` : ""}</div>`
+    : "";
 
   return `
     <article class="card ${c.pinned && !inTrash ? "pinned" : ""} ${inTrash ? "trashed" : ""} ${opts && opts.nested ? "nested" : ""}" data-card="${c.id}">
@@ -778,6 +887,7 @@ function renderCard(c, opts) {
       ${trashNote}
       ${body}
       <div class="card-meta">Erstellt am ${fmtTimestamp(c.created_at)}${creatorNote}${endNote}</div>
+      ${editedNote}
     </article>`;
 }
 
@@ -847,6 +957,76 @@ function statsLineHtml(list) {
   return parts.length ? `<p class="stats-line">${parts.join(" · ")}</p>` : "";
 }
 
+// Termin-Rubrik: der nächste anstehende Termin bekommt oben eine große
+// Hervorhebungs-Kachel, der Rest darunter wird nach zeitlicher Nähe
+// gruppiert ("Diese Woche" / "Später") statt als eine lange, gleichförmige
+// Liste. items ist bereits chronologisch sortiert (siehe renderGroupedFeed).
+// Übersichtliches 2-Spalten-Raster aller Termine (kompakte Kacheln), eine
+// davon "aufgeklappt" — die volle Karte erscheint darunter. Standardmäßig
+// der zeitlich nächste (items ist schon chronologisch sortiert). Bewusst
+// mit der normalen, dezenten Kartenoptik statt einer knalligen Hervorhebung.
+function renderTerminGroupBody(items) {
+  if (openTerminId === undefined || !items.some((c) => c.id === openTerminId)) {
+    openTerminId = items[0].id;
+  }
+  const tiles = items.map((c) => {
+    const d = parseISODate(c.event_date);
+    const rel = relativeDay(c.event_date);
+    return `
+      <button class="termin-tile ${c.id === openTerminId ? "active" : ""}" data-action="open-termin" data-card="${c.id}">
+        <span class="termin-tile-date"><b>${d.getDate()}</b><span>${MONTH_SHORT[d.getMonth()]}</span></span>
+        <span class="termin-tile-text">
+          <span class="termin-tile-title">${esc(c.title)}</span>
+          ${rel ? `<span class="termin-tile-rel">${esc(rel)}</span>` : ""}
+        </span>
+      </button>`;
+  }).join("");
+
+  const active = items.find((c) => c.id === openTerminId);
+  return `<div class="termin-grid">${tiles}</div>${active ? renderCard(active) : ""}`;
+}
+
+// Kompakte Chat-Bubble für eine Kurznachricht (Hinweis mit is_kurznachricht)
+// — bewusst ohne "Anpinnen" (in einem kleinen Chat-Feed ohne klare
+// Bedeutung) und ohne die große Kartenumrandung normaler Hinweise.
+function renderKurznachricht(c) {
+  const menu = `
+    <button data-action="edit" data-card="${c.id}">Bearbeiten</button>
+    <button class="danger" data-action="trash" data-card="${c.id}">Löschen</button>`;
+  const creatorNote = c.creator_name ? ` · ${esc(c.creator_name)}` : "";
+  return `
+    <article class="kurz-bubble" data-card="${c.id}">
+      <div class="kurz-bubble-head">
+        <b>${esc(c.title)}</b>
+        <span class="spacer"></span>
+        ${classLocked ? "" : `
+        <details class="menu">
+          <summary title="Aktionen">${ICONS.menu}</summary>
+          <div class="menu-list">${menu}</div>
+        </details>`}
+      </div>
+      ${c.body ? `<div class="kurz-bubble-body rich">${sanitizeRich(c.body)}</div>` : ""}
+      ${renderHinweisAttachments(c)}
+      <div class="kurz-bubble-meta">${fmtTimestamp(c.created_at)}${creatorNote}</div>
+    </article>`;
+}
+
+// Hinweis-Rubrik: Kurznachrichten laufen als kompakter Feed oben, normale
+// Hinweise (mit Titel-Fokus, Rich-Text, Anhängen) wie gewohnt darunter.
+function renderHinweisGroupBody(items) {
+  const kurz = items.filter((c) => c.is_kurznachricht);
+  const normal = items.filter((c) => !c.is_kurznachricht);
+  const kurzHtml = kurz.length ? `<div class="kurz-feed">${kurz.map(renderKurznachricht).join("")}</div>` : "";
+  return kurzHtml + normal.map(renderCard).join("");
+}
+
+function groupBodyHtml(type, items) {
+  if (!items.length) return `<p class="rubrik-panel-empty">Noch nichts in dieser Rubrik.</p>`;
+  if (type === "termin") return renderTerminGroupBody(items);
+  if (type === "hinweis") return renderHinweisGroupBody(items);
+  return items.map(renderCard).join("");
+}
+
 // Baut die nach Kartentyp gruppierte, auf-/zuklappbare Übersicht. Abschnitte
 // ohne "gesehen"-Eintrag für diesen Typ starten aufgeklappt (neue Geräte
 // sehen also erstmal alles, wie bisher) — sobald jemand manuell ein-/
@@ -854,8 +1034,9 @@ function statsLineHtml(list) {
 function renderGroupedFeed(list) {
   const groups = new Map();
   for (const c of list) {
-    if (!groups.has(c.type)) groups.set(c.type, []);
-    groups.get(c.type).push(c);
+    const rubrik = RUBRIK_KEY_BY_TYPE[c.type];
+    if (!groups.has(rubrik)) groups.set(rubrik, []);
+    groups.get(rubrik).push(c);
   }
   // Termine chronologisch (der nächste zuerst) statt nach Erstelldatum.
   if (groups.has("termin")) {
@@ -863,47 +1044,118 @@ function renderGroupedFeed(list) {
   }
 
   const seen = loadSeen();
-  const typesWithItems = TYPE_ORDER.filter((t) => groups.has(t));
-  let openType = loadOpenType();
-  if (openType === undefined) openType = typesWithItems[0] ?? null;
+  const rubrikenWithItems = RUBRIK_ORDER.filter((r) => groups.has(r));
+  let openRubrik = loadOpenType();
+  // Geräte, die noch eine alte Einzel-Rubrik (z. B. "liste") gespeichert
+  // hatten, bevor Umfrage/Liste/Tabelle zu "Beteiligung" zusammengelegt
+  // wurden, fallen hier sauber auf den Standard zurück statt auf eine
+  // Rubrik zu zeigen, die es nicht mehr gibt.
+  if (openRubrik !== null && !RUBRIK_ORDER.includes(openRubrik)) openRubrik = undefined;
+  if (openRubrik === undefined) openRubrik = rubrikenWithItems[0] ?? null;
 
-  // Alle sechs Rubriken stehen immer oben als feste Auswahl — auch wenn
+  // Alle vier Rubriken stehen immer oben als feste Auswahl — auch wenn
   // eine gerade leer ist. Antippen öffnet darunter, unter dem ganzen
   // Raster, den Inhalt der gewählten Rubrik (nur eine gleichzeitig).
-  const tiles = TYPE_ORDER.map((type) => {
-    const items = groups.get(type) || [];
-    const isOpen = type === openType;
-    const newCount = items.filter((c) => new Date(c.created_at).getTime() > (seen[type] || 0)).length;
+  const tiles = RUBRIK_ORDER.map((r) => {
+    const items = groups.get(r) || [];
+    const isOpen = r === openRubrik;
+    const newCount = items.filter((c) => new Date(c.created_at).getTime() > (seen[r] || 0)).length;
 
     return `
-      <button class="rubrik-tile type-${type} ${isOpen ? "active" : ""}" data-action="toggle-group" data-type="${type}">
+      <button class="rubrik-tile type-${r} ${isOpen ? "active" : ""}" data-action="toggle-group" data-type="${r}">
         ${newCount ? `<span class="rubrik-tile-new">${newCount}</span>` : ""}
-        <span class="rubrik-tile-icon">${ICONS[type]}</span>
+        <span class="rubrik-tile-icon">${RUBRIK_ICON[r]}</span>
         <span class="rubrik-tile-text">
-          <span class="rubrik-tile-label">${TYPE_LABELS[type]}</span>
-          <span class="rubrik-tile-count">${items.length} ${items.length === 1 ? TYPE_LABELS[type] : TYPE_LABELS_PLURAL[type]}</span>
+          <span class="rubrik-tile-label">${RUBRIK_LABEL[r]}</span>
+          <span class="rubrik-tile-count">${items.length} ${items.length === 1 ? RUBRIK_LABEL[r] : RUBRIK_LABEL_PLURAL[r]}</span>
         </span>
       </button>`;
   }).join("");
 
   let panel = "";
-  if (openType) {
-    const items = groups.get(openType) || [];
-    markSeen(openType);
+  if (openRubrik) {
+    const items = groups.get(openRubrik) || [];
+    markSeen(openRubrik);
     panel = `
-      <section class="rubrik-panel" data-type="${openType}">
-        <div class="rubrik-panel-head type-${openType}">
-          <span class="rubrik-tile-icon">${ICONS[openType]}</span>
-          <span class="group-label">${TYPE_LABELS[openType]}</span>
+      <section class="rubrik-panel" data-type="${openRubrik}">
+        <div class="rubrik-panel-head type-${openRubrik}">
+          <span class="rubrik-tile-icon">${RUBRIK_ICON[openRubrik]}</span>
+          <span class="group-label">${RUBRIK_LABEL[openRubrik]}</span>
           <span class="group-count">${items.length}</span>
         </div>
-        <div class="group-body">${items.length
-          ? items.map(renderCard).join("")
-          : `<p class="rubrik-panel-empty">Noch nichts in dieser Rubrik.</p>`}</div>
+        <div class="group-body">${groupBodyHtml(openRubrik, items)}</div>
       </section>`;
   }
 
   return statsLineHtml(list) + `<div class="rubrik-grid">${tiles}</div>` + panel;
+}
+
+/* ---------- Ordner-Unterseite (Rubrik "Datei") ---------- */
+
+// "Neu"-Markierung pro Ordner, rein geräteseitig — wie SEEN_KEY/markSeen
+// oben, nur mit Ordner-Id statt Kartentyp als Schlüssel. "" steht für
+// "Ohne Ordner".
+const FOLDER_SEEN_KEY = "pinnwand_ordner_gesehen";
+function loadFolderSeen() {
+  try { return JSON.parse(localStorage.getItem(FOLDER_SEEN_KEY)) || {}; }
+  catch { return {}; }
+}
+function markFolderSeen(key) {
+  const seen = loadFolderSeen();
+  seen[key] = Date.now();
+  localStorage.setItem(FOLDER_SEEN_KEY, JSON.stringify(seen));
+}
+
+// dateiCards: bereits auf Typ "datei" und die aktive Klasse gefilterte Liste.
+function renderFolderView(dateiCards) {
+  const backHead = (label, action, extra = "") => `
+    <div class="dateien-head">
+      <button class="btn ghost back-btn" data-action="${action}">${ICONS.arrowLeft}${esc(label)}</button>
+      <span class="spacer"></span>
+      ${extra}
+    </div>`;
+
+  if (openFolderId === undefined) {
+    const groups = new Map();
+    for (const c of dateiCards) {
+      const key = c.folder_id || "";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(c);
+    }
+    const seen = loadFolderSeen();
+    const folderTile = (key, name) => {
+      const items = groups.get(key) || [];
+      const newCount = items.filter((c) => new Date(c.created_at).getTime() > (seen[key] || 0)).length;
+      return `
+        <button class="folder-tile" data-action="open-folder" data-folder="${esc(key)}">
+          ${newCount ? `<span class="rubrik-tile-new">${newCount}</span>` : ""}
+          <span class="folder-tile-icon">${ICONS.folder}</span>
+          <span class="folder-tile-label">${esc(name)}</span>
+          <span class="folder-tile-count">${items.length} ${items.length === 1 ? "Datei" : "Dateien"}</span>
+        </button>`;
+    };
+    const foldersHere = foldersList.filter((f) => !activeClassId || f.class_id === activeClassId);
+    const tiles = foldersHere.map((f) => folderTile(f.id, f.name)).join("")
+      + folderTile("", "Ohne Ordner")
+      + (classLocked ? "" : `
+        <button class="folder-tile folder-tile-new" data-action="create-folder">
+          <span class="folder-tile-icon">+</span>
+          <span class="folder-tile-label">Neuer Ordner</span>
+        </button>`);
+    return backHead("Zurück zur Pinnwand", "dateien-back") + `<div class="folder-grid">${tiles}</div>`;
+  }
+
+  const items = dateiCards.filter((c) => (c.folder_id || "") === openFolderId);
+  const folder = foldersList.find((f) => f.id === openFolderId);
+  markFolderSeen(openFolderId);
+  const manage = (!classLocked && folder) ? `
+    <button class="btn small" data-action="rename-folder" data-folder="${folder.id}">Umbenennen</button>
+    <button class="btn small danger" data-action="delete-folder" data-folder="${folder.id}">Löschen</button>` : "";
+  return backHead("Ordner", "open-folder-grid", manage)
+    + `<h2 class="group-label" style="margin:4px 2px 12px">${esc(folder ? folder.name : "Ohne Ordner")}</h2>`
+    + `<div class="group-body">${items.length
+        ? items.map(renderCard).join("")
+        : `<p class="rubrik-panel-empty">Noch keine Datei in diesem Ordner.</p>`}</div>`;
 }
 
 const EMPTY_TEXT = {
@@ -935,6 +1187,8 @@ function render() {
 
   if (view === "feed") {
     elFeed.innerHTML = renderGroupedFeed(list);
+  } else if (view === "dateien") {
+    elFeed.innerHTML = renderFolderView(list.filter((c) => c.type === "datei"));
   } else if (view === "papierkorb") {
     const toolbar = list.length && !classLocked
       ? `<div class="feed-toolbar">
@@ -946,10 +1200,10 @@ function render() {
     elFeed.innerHTML = list.map(renderCard).join("");
   }
 
-  // Im Feed übernimmt das Kachel-Raster selbst die Leer-Anzeige (jede
-  // Rubrik zeigt "0 ..."), der generische Hinweistext ist dort überflüssig.
-  elEmpty.textContent = EMPTY_TEXT[view];
-  elEmpty.hidden = view === "feed" ? true : list.length > 0;
+  // Im Feed und in der Ordner-Unterseite übernimmt das Kachel-Raster selbst
+  // die Leer-Anzeige, der generische Hinweistext ist dort überflüssig.
+  elEmpty.textContent = EMPTY_TEXT[view] || "";
+  elEmpty.hidden = view === "feed" || view === "dateien" ? true : list.length > 0;
 }
 
 /* ---------- Dialoge: Bestätigen und Nachfragen ---------- */
@@ -972,14 +1226,19 @@ function confirmDlg(text, okLabel = "Löschen") {
 }
 
 // title: Überschrift des Dialogs.
-// fields: Array von { name, label?, placeholder?, maxlength?, value?, optional? }.
+// fields: Array von { name, label?, placeholder?, maxlength?, value?, optional? }
+//         oder, für eine Auswahlliste statt Textfeld: { name, label?, value?,
+//         options: [{ value, label }, ...] }.
 // Löst mit einem Objekt { [name]: getrimmter Wert } auf, oder null bei Abbruch.
 function promptDlg(title, fields) {
   return new Promise((resolve) => {
     $("promptTitle").textContent = title;
     const wrap = $("promptFields");
-    wrap.innerHTML = fields.map((f, i) => fieldHtml(f.label || "",
-      `<input type="text" name="${esc(f.name)}" placeholder="${esc(f.placeholder || "")}"
+    wrap.innerHTML = fields.map((f, i) => fieldHtml(f.label || "", f.options
+      ? `<select name="${esc(f.name)}" ${i === 0 ? "autofocus" : ""}>${f.options
+          .map((o) => `<option value="${esc(o.value)}" ${o.value === f.value ? "selected" : ""}>${esc(o.label)}</option>`)
+          .join("")}</select>`
+      : `<input type="text" name="${esc(f.name)}" placeholder="${esc(f.placeholder || "")}"
               maxlength="${f.maxlength || 200}" value="${esc(f.value || "")}"
               ${f.optional ? "" : "required"} ${i === 0 ? "autofocus" : ""}>`)).join("");
     const form = $("promptForm");
@@ -1037,6 +1296,16 @@ function richEditorFieldHtml(card, label) {
     </div>`;
 }
 
+// Ordner-Optionen für eine Datei-Karte, gefiltert auf die gewählte Klasse
+// (Ordner gehören zu genau einer Klasse) — auch für den change-Listener auf
+// dem Klasse-Feld in openEditor() genutzt, wenn die Klasse umgestellt wird.
+function folderOptionsHtml(classId, selectedId) {
+  const opts = foldersList
+    .filter((f) => f.class_id === classId)
+    .map((f) => `<option value="${f.id}" ${f.id === selectedId ? "selected" : ""}>${esc(f.name)}</option>`);
+  return `<option value="">Ohne Ordner</option>${opts.join("")}`;
+}
+
 function editorFieldsHtml(type, card) {
   const v = (name) => esc(card ? card[name] ?? "" : "");
   const creatorDefault = card
@@ -1057,6 +1326,11 @@ function editorFieldsHtml(type, card) {
   }
 
   if (type === "hinweis") {
+    html += `
+      <label class="field-check">
+        <input type="checkbox" name="is_kurznachricht" ${card && card.is_kurznachricht ? "checked" : ""}>
+        <span>Als Kurznachricht zeigen (kompakt, oben in der Hinweis-Rubrik — für kurze, schnelle Infos)</span>
+      </label>`;
     html += richEditorFieldHtml(card);
   } else if (type === "termin") {
     html += richEditorFieldHtml(card, "Zusammenfassung (optional)");
@@ -1116,12 +1390,20 @@ function editorFieldsHtml(type, card) {
       `<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" required>`);
   }
 
+  let currentClassId = card ? (card.class_id || "") : activeClassId;
   if (classesList.length) {
-    const currentClassId = card ? (card.class_id || "") : activeClassId;
     const opts = [`<option value="">Gemeinsam (beide Klassen)</option>`].concat(
       classesList.map((cl) =>
         `<option value="${cl.id}" ${cl.id === currentClassId ? "selected" : ""}>${CLASS_ICON[cl.slug] || ""} ${esc(cl.name)}</option>`));
-    html += fieldHtml("Klasse", `<select name="class_id">${opts.join("")}</select>`);
+    html += fieldHtml("Klasse", `<select name="class_id" id="editorClassSelect">${opts.join("")}</select>`);
+  }
+
+  if (type === "datei") {
+    const currentFolderId = card ? (card.folder_id || "") : "";
+    html += fieldHtml("Ordner", `<select name="folder_id" id="editorFolderSelect">${folderOptionsHtml(currentClassId, currentFolderId)}</select>`);
+    if (!currentClassId) {
+      html += `<p class="field-hint">Gemeinsame Dateien (beide Klassen) können aktuell keinem Ordner zugeordnet werden.</p>`;
+    }
   }
 
   html += fieldHtml("Endet am (optional)",
@@ -1226,6 +1508,18 @@ function openEditor(type, card = null, parentId = null) {
   }
 
   if (type === "hinweis" || type === "termin") setupRichEditor();
+
+  // Ordner-Auswahl hängt von der gewählten Klasse ab — bei Wechsel der
+  // Klasse die Optionen neu aufbauen (siehe folderOptionsHtml).
+  if (type === "datei") {
+    const classSel = $("editorClassSelect");
+    const folderSel = $("editorFolderSelect");
+    if (classSel && folderSel) {
+      classSel.addEventListener("change", () => {
+        folderSel.innerHTML = folderOptionsHtml(classSel.value, "");
+      });
+    }
+  }
 
   dlgEditor.showModal();
 }
@@ -1414,9 +1708,11 @@ async function submitEditor() {
     body: String(fd.get("body") || "").trim(),
     pinned: fd.get("pinned") === "on",
     important: fd.get("important") === "on",
+    is_kurznachricht: fd.get("is_kurznachricht") === "on",
     end_date: String(fd.get("end_date") || ""),
   };
   if (fd.has("class_id")) common.class_id = String(fd.get("class_id") || "");
+  if (fd.has("folder_id")) common.folder_id = String(fd.get("folder_id") || "");
 
   if (st.type === "hinweis" || st.type === "termin") {
     // Hinweis und Termin haben keine <textarea name="body"> mehr, sondern
@@ -1570,6 +1866,8 @@ async function doAction(fn, successMsg) {
 // durchkommt (z. B. nach einem Reload mit veraltetem DOM-Zustand).
 const ADMIN_NUR_HAUPTLINK = new Set([
   "edit", "pin", "trash", "restore", "delete-forever", "add-linked", "empty-trash",
+  "create-folder", "rename-folder", "delete-folder", "move-file",
+  "archive-card", "unarchive-card",
 ]);
 
 async function handleFeedClick(ev) {
@@ -1596,6 +1894,32 @@ async function handleFeedClick(ev) {
       if (!c) break;
       await doAction(() => rpc("update_card", { p_id: c.id, p: { pinned: !c.pinned } }),
         c.pinned ? "Karte gelöst." : "Karte angepinnt.");
+      break;
+    }
+    case "archive-card": {
+      await doAction(() => rpc("update_card", { p_id: cardId, p: { archived: true } }),
+        "Ins Archiv verschoben.");
+      break;
+    }
+    case "unarchive-card": {
+      await doAction(() => rpc("update_card", { p_id: cardId, p: { archived: false } }),
+        "Aus dem Archiv zurückgeholt.");
+      break;
+    }
+    case "move-file": {
+      const c = cardById(cardId);
+      if (!c) break;
+      const opts = [{ value: "", label: "Ohne Ordner" }].concat(
+        foldersList.filter((f) => f.class_id === c.class_id)
+          .map((f) => ({ value: f.id, label: f.name })));
+      const vals = await promptDlg("Datei verschieben",
+        [{ name: "folder_id", label: "Ordner", value: c.folder_id || "", options: opts }]);
+      if (!vals) break;
+      // Reine Umsortierung, keine inhaltliche Bearbeitung — zählt bewusst
+      // nicht als "Zuletzt geändert" (kein creator_name im Payload, siehe
+      // update_card).
+      await doAction(() => rpc("update_card", { p_id: c.id, p: { folder_id: vals.folder_id } }),
+        "Datei verschoben.");
       break;
     }
     case "trash": {
@@ -1638,9 +1962,10 @@ async function handleFeedClick(ev) {
       const target = cardById(cardId);
       if (!target) break;
       if (view === "feed") {
-        const panelEl = elFeed.querySelector(`.rubrik-panel[data-type="${CSS.escape(target.type)}"]`);
+        const rubrik = RUBRIK_KEY_BY_TYPE[target.type];
+        const panelEl = elFeed.querySelector(`.rubrik-panel[data-type="${CSS.escape(rubrik)}"]`);
         if (!panelEl) {
-          saveOpenType(target.type);
+          saveOpenType(rubrik);
           render();
         }
       }
@@ -1655,9 +1980,69 @@ async function handleFeedClick(ev) {
     }
     case "toggle-group": {
       const type = btn.dataset.type;
+      // "Datei" bekommt eine eigene Unterseite mit Ordnern statt des
+      // normalen Aufklapp-Panels (siehe renderFolderView).
+      if (type === "datei") {
+        view = "dateien";
+        openFolderId = undefined;
+        render();
+        break;
+      }
       const isOpen = btn.classList.contains("active");
       saveOpenType(isOpen ? null : type);
       render();
+      break;
+    }
+    case "dateien-back": {
+      view = "feed";
+      render();
+      break;
+    }
+    case "open-folder-grid": {
+      openFolderId = undefined;
+      render();
+      break;
+    }
+    case "open-folder": {
+      openFolderId = btn.dataset.folder;
+      render();
+      break;
+    }
+    case "open-termin": {
+      openTerminId = btn.dataset.card;
+      render();
+      break;
+    }
+    case "create-folder": {
+      if (!activeClassId) {
+        toast("Bitte zuerst oben eine Klasse auswählen, für die der Ordner gilt.", true);
+        break;
+      }
+      const vals = await promptDlg("Neuer Ordner", [
+        { name: "name", label: "Ordnername", placeholder: "z. B. Elternabend Fotos", maxlength: 60 },
+        { name: "creator_name", label: "Dein Name bzw. deine Funktion", placeholder: "z. B. Frau Müller, Lehrkraft",
+          maxlength: 80, value: localStorage.getItem(CREATOR_NAME_KEY) || "" },
+      ]);
+      if (!vals) break;
+      localStorage.setItem(CREATOR_NAME_KEY, vals.creator_name);
+      await doAction(() => rpc("create_folder",
+        { p_class_id: activeClassId, p_name: vals.name, p_creator_name: vals.creator_name }), "Ordner angelegt.");
+      break;
+    }
+    case "rename-folder": {
+      const folder = foldersList.find((f) => f.id === btn.dataset.folder);
+      if (!folder) break;
+      const vals = await promptDlg("Ordner umbenennen",
+        [{ name: "name", label: "Ordnername", maxlength: 60, value: folder.name }]);
+      if (!vals) break;
+      await doAction(() => rpc("rename_folder", { p_folder_id: folder.id, p_name: vals.name }), "Ordner umbenannt.");
+      break;
+    }
+    case "delete-folder": {
+      const ok = await confirmDlg("Diesen Ordner löschen? Das geht nur, wenn er leer ist.", "Löschen");
+      if (!ok) break;
+      openFolderId = undefined;
+      await doAction(() => rpc("delete_folder", { p_folder_id: btn.dataset.folder }), "Ordner gelöscht.");
       break;
     }
     case "item-fill": {
@@ -1775,6 +2160,41 @@ async function handleFeedChange(ev) {
   }
 }
 
+/* ---------- Versionsfenster ---------- */
+
+function renderVersionDialog() {
+  if (!elVersionBtn) return;
+  const el = $("versionList");
+  if (el) {
+    el.innerHTML = VERSIONS.map(
+      (v) => `<div class="version-entry"><h3>${esc(v.version)}</h3><ul>${v.items
+        .map((item) => `<li>${esc(item)}</li>`)
+        .join("")}</ul></div>`
+    ).join("");
+  }
+}
+
+function openVersionDialog() {
+  dlgVersion.showModal();
+  localStorage.setItem(VERSION_SEEN_KEY, VERSIONS[0].version);
+  elVersionBtn.classList.remove("has-update");
+}
+
+// Beim Start prüfen, ob es seit dem letzten Besuch dieses Geräts eine neue
+// Version gibt — falls ja, Punkt am Button und einmalig automatisch öffnen.
+function checkForNewVersion() {
+  if (!elVersionBtn) return;
+  const seen = localStorage.getItem(VERSION_SEEN_KEY);
+  if (seen === VERSIONS[0].version) return;
+  if (seen === null) {
+    // Allererster Besuch auf diesem Gerät — kein Popup, einfach als gesehen merken.
+    localStorage.setItem(VERSION_SEEN_KEY, VERSIONS[0].version);
+    return;
+  }
+  elVersionBtn.classList.add("has-update");
+  openVersionDialog();
+}
+
 /* ---------- Push-Benachrichtigungen ---------- */
 
 const elPushBell = $("pushBell");
@@ -1853,8 +2273,8 @@ async function togglePush() {
 /* ---------- Initialisierung ---------- */
 
 async function init() {
-  // Ansichten und Filter
-  $("viewTabs").addEventListener("click", (ev) => {
+  // Ansichten und Filter (feste Fußleiste, siehe .bottom-nav)
+  elViewTabs.addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-view]");
     if (!btn) return;
     view = btn.dataset.view;
@@ -1922,6 +2342,15 @@ async function init() {
     elPushBell.innerHTML = ICONS.bell;
     elPushBell.addEventListener("click", togglePush);
     refreshBellState();
+  }
+
+  if (elVersionBtn) {
+    renderVersionDialog();
+    elVersionBtn.addEventListener("click", openVersionDialog);
+    dlgVersion.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-close]")) dlgVersion.close();
+    });
+    checkForNewVersion();
   }
 
   render();
