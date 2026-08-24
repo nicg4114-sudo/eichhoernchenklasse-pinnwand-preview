@@ -36,21 +36,14 @@ const TYPE_LABELS = {
   datei: "Datei",
 };
 
-// Rubriken für die Kachel-Navigation in der gruppierten Übersicht — bündelt
-// Umfrage/Liste/Tabelle unter "Beteiligung", weil bei allen dreien Eltern
-// aktiv etwas eintragen/ankreuzen statt nur zu lesen. Jede Karte behält
-// ihren echten Typ für Badge/Farbe/Erstellen-Dialog (siehe TYPE_LABELS).
-const RUBRIK_ORDER = ["hinweis", "termin", "beteiligung", "datei"];
-const RUBRIK_TYPES = {
-  hinweis: ["hinweis"],
-  termin: ["termin"],
-  beteiligung: ["umfrage", "liste", "tabelle"],
-  datei: ["datei"],
-};
-const RUBRIK_KEY_BY_TYPE = Object.fromEntries(
-  Object.entries(RUBRIK_TYPES).flatMap(([rubrik, types]) => types.map((t) => [t, rubrik])));
-const RUBRIK_LABEL = { hinweis: "Hinweis", termin: "Termin", beteiligung: "Beteiligung", datei: "Datei" };
-const RUBRIK_LABEL_PLURAL = { hinweis: "Hinweise", termin: "Termine", beteiligung: "Beteiligungen", datei: "Dateien" };
+// Die drei Bubbles über der Fußleiste auf der Startseite (siehe
+// renderBubbles) — "Beteiligung" bündelt Umfrage/Liste/Tabelle, weil bei
+// allen dreien Eltern aktiv etwas eintragen/ankreuzen statt nur zu lesen.
+// Jede Karte behält ihren echten Typ für Badge/Farbe/Erstellen-Dialog
+// (siehe TYPE_LABELS). Hinweis hat keine Bubble — läuft übers Karussell.
+const BUBBLE_ORDER = ["termin", "beteiligung", "datei"];
+const RUBRIK_LABEL = { termin: "Termin", beteiligung: "Beteiligung", datei: "Datei" };
+const RUBRIK_LABEL_PLURAL = { termin: "Termine", beteiligung: "Beteiligungen", datei: "Dateien" };
 
 // Kleines, einheitliches Icon-Set (ersetzt Emojis für ein ruhigeres Bild).
 const ICONS = {
@@ -67,11 +60,14 @@ const ICONS = {
   arrowLeft: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="12,4.5 6,10 12,15.5"/></svg>`,
   folder: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2.8 5.3a1 1 0 0 1 1-1h3.6l1.4 1.7h6.4a1 1 0 0 1 1 1v7.3a1 1 0 0 1-1 1H3.8a1 1 0 0 1-1-1z"/></svg>`,
   beteiligung: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.25"/><path d="M6.6 10.2l2.2 2.2 4.6-4.8"/></svg>`,
+  warning: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2l8 14H2z"/><line x1="10" y1="8.3" x2="10" y2="12.3"/><circle cx="10" cy="14.6" r=".9" fill="currentColor" stroke="none"/></svg>`,
+  check: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4.5,10.5 8,14 15.5,6"/></svg>`,
+  home: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 9.2L10 3.5l6.8 5.7"/><path d="M4.8 8v7.5a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1V8"/></svg>`,
 };
 
-// Icons je Kachel-Rubrik (siehe RUBRIK_ORDER) — "Beteiligung" bündelt drei
-// echte Kartentypen (Umfrage/Liste/Tabelle) unter einem gemeinsamen Icon.
-const RUBRIK_ICON = { hinweis: ICONS.hinweis, termin: ICONS.termin, beteiligung: ICONS.beteiligung, datei: ICONS.datei };
+// Icons je Bubble (siehe BUBBLE_ORDER) — "Beteiligung" bündelt drei echte
+// Kartentypen (Umfrage/Liste/Tabelle) unter einem gemeinsamen Icon.
+const RUBRIK_ICON = { termin: ICONS.termin, beteiligung: ICONS.beteiligung, datei: ICONS.datei };
 
 /* ---------- Versionshinweise ---------- */
 
@@ -88,11 +84,13 @@ const VERSIONS = [
       "Feste Leiste unten (Pinnwand/Archiv/Papierkorb/Version) statt Menü oben rechts — mit dem Daumen leichter erreichbar.",
       "Push-Benachrichtigungen öffnen jetzt zuverlässiger die App beim Antippen.",
       "Neu: Dateien lassen sich per „In Ordner verschieben\" direkt umsortieren.",
-      "Neu: die Termin-Rubrik zeigt jetzt ein übersichtliches 2-Spalten-Raster — antippen klappt die Details auf.",
       "Neu: Kurznachrichten — Hinweise lassen sich als kompakter Chat-Feed oben in der Hinweis-Rubrik anzeigen.",
       "Umfrage, Liste und Tabelle laufen jetzt zusammen unter der neuen Rubrik „Beteiligung\".",
       "Neu: Einträge jeder Art lassen sich jetzt manuell ins Archiv verschieben und wieder zurückholen.",
       "Neu: eigenes, zartblaues Design für alle, die über den Schmetterlingsklasse-Link kommen.",
+      "Neu: Startseite als Dashboard — Hinweise zum Durchwischen, der nächste Termin und offene Aufgaben auf einen Blick, darunter drei Blasen zu Termin, Beteiligung und Datei.",
+      "Neu: Aufgaben — bei Hinweisen, Umfragen, Listen und Tabellen lässt sich „Als Aufgabe markieren\" ankreuzen; jede*r kann sie für sich selbst auf „erledigt\" setzen.",
+      "Neu: die Termin-Rubrik zeigt jetzt schlanke Streifen mit Zeitstrahl (Diese Woche/In 2 Wochen/…) — antippen klappt die Details auf.",
     ],
   },
   {
@@ -115,9 +113,8 @@ let foldersList = [];     // aus DB geladen: [{id, class_id, name, created_by}, 
 // Ordner-Unterseite (Rubrik "Datei", siehe renderFolderView): undefined =
 // Ordner-Raster, "" = Inhalt von "Ohne Ordner", sonst eine Ordner-Id.
 let openFolderId;
-// Welcher Termin im Termin-Raster gerade aufgeklappt ist (siehe
-// renderTerminGroupBody) — undefined = noch keiner gewählt, fällt dann auf
-// den zeitlich nächsten zurück.
+// Welcher Termin-Streifen gerade aufgeklappt ist (siehe renderTermineView)
+// — null/undefined = keiner.
 let openTerminId;
 
 // Welche Klasse gerade "meine" ist — rein clientseitiger Anzeigefilter,
@@ -151,6 +148,24 @@ if (classLocked && localStorage.getItem(CLASS_SLUG_KEY) === "schmetterling") {
 // hintereinander an und müssten sonst jedes Mal neu tippen).
 const CREATOR_NAME_KEY = "pinnwand_ersteller_name";
 const CLASS_ICON = { eichhoernchen: "🐿️", schmetterling: "🦋" };
+
+// Wer eine Aufgabe (siehe is_aufgabe) für sich selbst erledigt hat, merkt
+// das rein geräteseitig — wie die Doppelstimmen-Sperre bei Umfragen. Keine
+// Rückmeldung an die Klasse, kein Konten-System.
+const AUFGABEN_ERLEDIGT_KEY = "pinnwand_aufgaben_erledigt";
+function loadAufgabenErledigt() {
+  try { return JSON.parse(localStorage.getItem(AUFGABEN_ERLEDIGT_KEY)) || {}; }
+  catch { return {}; }
+}
+function isAufgabeErledigt(id) {
+  return !!loadAufgabenErledigt()[id];
+}
+function setAufgabeErledigt(id, done) {
+  const map = loadAufgabenErledigt();
+  if (done) map[id] = true; else delete map[id];
+  localStorage.setItem(AUFGABEN_ERLEDIGT_KEY, JSON.stringify(map));
+}
+
 const pollEditing = new Set();   // Karten-IDs, bei denen gerade Optionen gewählt werden
 let editorState = null;          // { mode: 'create'|'edit', type, card, items }
 let pendingParentId = null;      // Termin-Id, mit der die nächste neu angelegte Karte verknüpft wird
@@ -166,38 +181,8 @@ const deviceToken = (() => {
   return t;
 })();
 
-// "Neu"-Markierungen und aufgeklappte Kategorien — rein geräteseitig
-// (localStorage), keine Anmeldung nötig, genau wie deviceToken oben.
-const SEEN_KEY = "pinnwand_gesehen";
-const OPEN_KEY = "pinnwand_offene_kategorien";
-
 // Zuletzt gesehene Version (siehe VERSIONS oben und checkForNewVersion).
 const VERSION_SEEN_KEY = "pinnwand_version_gesehen";
-
-function loadSeen() {
-  try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || {}; }
-  catch { return {}; }
-}
-function markSeen(type) {
-  const seen = loadSeen();
-  seen[type] = Date.now();
-  localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
-}
-
-// Akkordeon: höchstens eine Rubrik gleichzeitig offen. undefined = noch nie
-// manuell verändert -> Standard "erste Rubrik mit Inhalt offen". null =
-// bewusst alles zugeklappt.
-function loadOpenType() {
-  const raw = localStorage.getItem(OPEN_KEY);
-  if (raw === null) return undefined;
-  try {
-    const v = JSON.parse(raw);
-    return typeof v === "string" || v === null ? v : undefined;
-  } catch { return undefined; }
-}
-function saveOpenType(type) {
-  localStorage.setItem(OPEN_KEY, JSON.stringify(type ?? null));
-}
 
 /* ---------- DOM-Kurzgriffe ---------- */
 
@@ -206,6 +191,8 @@ const elFeed = $("feed");
 const elEmpty = $("empty");
 const elNotice = $("notice");
 const elFab = $("fab");
+const elDashBubbles = $("dashBubbles");
+const elMain = document.querySelector("main");
 const elScrollTopBtn = $("scrollTopBtn");
 const elClassSelect = $("classSelect");
 const elBrandTitle = $("brandTitle");
@@ -811,6 +798,20 @@ function renderHinweisAttachments(c) {
   return html + `</div>`;
 }
 
+// Kennzeichen + Erledigt-Knopf für eine als Aufgabe markierte Karte
+// (Hinweis/Umfrage/Liste/Tabelle, siehe is_aufgabe) — erscheint überall,
+// wo die Karte gerendert wird, nicht nur im Dashboard.
+function aufgabeBlockHtml(c) {
+  if (!c.is_aufgabe) return "";
+  const done = isAufgabeErledigt(c.id);
+  return `
+    <div class="card-aufgabe ${done ? "done" : ""}">
+      ${done ? ICONS.check : ICONS.warning}
+      <span>${done ? "Für dich erledigt" : "Aufgabe"}</span>
+      ${done ? "" : `<button type="button" class="btn small" data-action="aufgabe-done" data-card="${c.id}">Erledigt</button>`}
+    </div>`;
+}
+
 function renderCard(c, opts) {
   const inTrash = !!c.trashed_at;
   let menu;
@@ -888,6 +889,7 @@ function renderCard(c, opts) {
       ${body}
       <div class="card-meta">Erstellt am ${fmtTimestamp(c.created_at)}${creatorNote}${endNote}</div>
       ${editedNote}
+      ${aufgabeBlockHtml(c)}
     </article>`;
 }
 
@@ -957,35 +959,6 @@ function statsLineHtml(list) {
   return parts.length ? `<p class="stats-line">${parts.join(" · ")}</p>` : "";
 }
 
-// Termin-Rubrik: der nächste anstehende Termin bekommt oben eine große
-// Hervorhebungs-Kachel, der Rest darunter wird nach zeitlicher Nähe
-// gruppiert ("Diese Woche" / "Später") statt als eine lange, gleichförmige
-// Liste. items ist bereits chronologisch sortiert (siehe renderGroupedFeed).
-// Übersichtliches 2-Spalten-Raster aller Termine (kompakte Kacheln), eine
-// davon "aufgeklappt" — die volle Karte erscheint darunter. Standardmäßig
-// der zeitlich nächste (items ist schon chronologisch sortiert). Bewusst
-// mit der normalen, dezenten Kartenoptik statt einer knalligen Hervorhebung.
-function renderTerminGroupBody(items) {
-  if (openTerminId === undefined || !items.some((c) => c.id === openTerminId)) {
-    openTerminId = items[0].id;
-  }
-  const tiles = items.map((c) => {
-    const d = parseISODate(c.event_date);
-    const rel = relativeDay(c.event_date);
-    return `
-      <button class="termin-tile ${c.id === openTerminId ? "active" : ""}" data-action="open-termin" data-card="${c.id}">
-        <span class="termin-tile-date"><b>${d.getDate()}</b><span>${MONTH_SHORT[d.getMonth()]}</span></span>
-        <span class="termin-tile-text">
-          <span class="termin-tile-title">${esc(c.title)}</span>
-          ${rel ? `<span class="termin-tile-rel">${esc(rel)}</span>` : ""}
-        </span>
-      </button>`;
-  }).join("");
-
-  const active = items.find((c) => c.id === openTerminId);
-  return `<div class="termin-grid">${tiles}</div>${active ? renderCard(active) : ""}`;
-}
-
 // Kompakte Chat-Bubble für eine Kurznachricht (Hinweis mit is_kurznachricht)
 // — bewusst ohne "Anpinnen" (in einem kleinen Chat-Feed ohne klare
 // Bedeutung) und ohne die große Kartenumrandung normaler Hinweise.
@@ -1008,93 +981,163 @@ function renderKurznachricht(c) {
       ${c.body ? `<div class="kurz-bubble-body rich">${sanitizeRich(c.body)}</div>` : ""}
       ${renderHinweisAttachments(c)}
       <div class="kurz-bubble-meta">${fmtTimestamp(c.created_at)}${creatorNote}</div>
+      ${aufgabeBlockHtml(c)}
     </article>`;
 }
 
-// Hinweis-Rubrik: Kurznachrichten laufen als kompakter Feed oben, normale
-// Hinweise (mit Titel-Fokus, Rich-Text, Anhängen) wie gewohnt darunter.
-function renderHinweisGroupBody(items) {
-  const kurz = items.filter((c) => c.is_kurznachricht);
-  const normal = items.filter((c) => !c.is_kurznachricht);
-  const kurzHtml = kurz.length ? `<div class="kurz-feed">${kurz.map(renderKurznachricht).join("")}</div>` : "";
-  return kurzHtml + normal.map(renderCard).join("");
+/* ---------- Startseite (Dashboard) ---------- */
+
+// list: alle sichtbaren, nicht archivierten Karten der aktiven Klasse.
+// Die drei Bubbles laufen NICHT hier mit rein — die sitzen fest in
+// #dashBubbles über der Fußleiste, siehe render().
+function renderStart(list) {
+  const hinweise = list.filter((c) => c.type === "hinweis");
+  const termine = list.filter((c) => c.type === "termin");
+
+  return statsLineHtml(list)
+    + renderHinweisCarousel(hinweise)
+    + renderNaechsterTermin(termine)
+    + renderOffeneAufgaben(list);
 }
 
-function groupBodyHtml(type, items) {
-  if (!items.length) return `<p class="rubrik-panel-empty">Noch nichts in dieser Rubrik.</p>`;
-  if (type === "termin") return renderTerminGroupBody(items);
-  if (type === "hinweis") return renderHinweisGroupBody(items);
-  return items.map(renderCard).join("");
+// Wischbares Karussell: eine Hinweis-Karte je Bildschirmbreite, Punkte
+// darunter zeigen Position/Anzahl. Kurznachrichten laufen kompakt (siehe
+// renderKurznachricht), normale Hinweise als volle Karte.
+function renderHinweisCarousel(hinweise) {
+  if (!hinweise.length) {
+    return `<p class="rubrik-panel-empty">Noch keine Hinweise.</p>`;
+  }
+  const slides = hinweise.map((c) =>
+    `<div class="hinweis-slide">${c.is_kurznachricht ? renderKurznachricht(c) : renderCard(c)}</div>`).join("");
+  const dots = hinweise.length > 1
+    ? `<div class="hinweis-dots">${hinweise.map((_, i) =>
+        `<span class="hinweis-dot ${i === 0 ? "active" : ""}"></span>`).join("")}</div>`
+    : "";
+  return `<div class="hinweis-carousel" id="hinweisCarousel">${slides}</div>${dots}`;
 }
 
-// Baut die nach Kartentyp gruppierte, auf-/zuklappbare Übersicht. Abschnitte
-// ohne "gesehen"-Eintrag für diesen Typ starten aufgeklappt (neue Geräte
-// sehen also erstmal alles, wie bisher) — sobald jemand manuell ein-/
-// ausklappt, wird das gerätespezifisch gemerkt.
-function renderGroupedFeed(list) {
-  const groups = new Map();
-  for (const c of list) {
-    const rubrik = RUBRIK_KEY_BY_TYPE[c.type];
-    if (!groups.has(rubrik)) groups.set(rubrik, []);
-    groups.get(rubrik).push(c);
-  }
-  // Termine chronologisch (der nächste zuerst) statt nach Erstelldatum.
-  if (groups.has("termin")) {
-    groups.get("termin").sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)));
-  }
+// Farbig hervorgehobene Zeile für den zeitlich nächsten Termin — Antippen
+// führt zur Termin-Rubrik mit genau diesem Termin aufgeklappt.
+function renderNaechsterTermin(termine) {
+  if (!termine.length) return "";
+  const next = [...termine].sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))[0];
+  const d = parseISODate(next.event_date);
+  return `
+    <div class="dash-section-label">Nächster Termin</div>
+    <button class="naechster-termin" data-action="open-rubrik" data-type="termin" data-card="${next.id}">
+      <span class="naechster-termin-date"><b>${d.getDate()}</b><span>${MONTH_SHORT[d.getMonth()]}</span></span>
+      <span class="naechster-termin-text">
+        <span class="naechster-termin-title">${esc(next.title)}</span>
+        <span class="naechster-termin-time">${next.event_time ? esc(fmtTime(next.event_time)) + " Uhr" : ""}</span>
+      </span>
+    </button>`;
+}
 
-  const seen = loadSeen();
-  const rubrikenWithItems = RUBRIK_ORDER.filter((r) => groups.has(r));
-  let openRubrik = loadOpenType();
-  // Geräte, die noch eine alte Einzel-Rubrik (z. B. "liste") gespeichert
-  // hatten, bevor Umfrage/Liste/Tabelle zu "Beteiligung" zusammengelegt
-  // wurden, fallen hier sauber auf den Standard zurück statt auf eine
-  // Rubrik zu zeigen, die es nicht mehr gibt.
-  if (openRubrik !== null && !RUBRIK_ORDER.includes(openRubrik)) openRubrik = undefined;
-  if (openRubrik === undefined) openRubrik = rubrikenWithItems[0] ?? null;
+// Karten mit is_aufgabe, die auf diesem Gerät noch nicht erledigt sind
+// (siehe AUFGABEN_ERLEDIGT_KEY) — verschwindet komplett, wenn nichts offen
+// ist, statt einen leeren Platzhalter zu zeigen.
+function renderOffeneAufgaben(list) {
+  const open = list.filter((c) => c.is_aufgabe && !isAufgabeErledigt(c.id));
+  if (!open.length) return "";
+  const cardsHtml = open.map((c) => `
+    <div class="aufgabe-card">
+      <div class="aufgabe-card-title">${esc(c.title)}</div>
+      <div class="aufgabe-card-sub">${TYPE_LABELS[c.type]}${c.creator_name ? " · " + esc(c.creator_name) : ""}</div>
+      <button type="button" class="btn small" data-action="aufgabe-done" data-card="${c.id}">Für mich erledigt</button>
+    </div>`).join("");
+  return `
+    <div class="dash-section-label warn">${open.length === 1 ? "Offene Aufgabe" : "Offene Aufgaben"} ${ICONS.warning}</div>
+    <div class="aufgaben-list">${cardsHtml}</div>`;
+}
 
-  // Alle vier Rubriken stehen immer oben als feste Auswahl — auch wenn
-  // eine gerade leer ist. Antippen öffnet darunter, unter dem ganzen
-  // Raster, den Inhalt der gewählten Rubrik (nur eine gleichzeitig).
-  const tiles = RUBRIK_ORDER.map((r) => {
-    const items = groups.get(r) || [];
-    const isOpen = r === openRubrik;
-    const newCount = items.filter((c) => new Date(c.created_at).getTime() > (seen[r] || 0)).length;
-
+// Drei Bubbles, Zugang zu den vollen Rubrik-Ansichten (Termin/Beteiligung/
+// Datei). Hinweis hat keine eigene, die läuft ja schon oben als Karussell.
+// Wird in #dashBubbles gerendert (fest über der Fußleiste), nicht in den
+// scrollbaren Feed — siehe render().
+function renderBubbles(groups) {
+  const bubbles = BUBBLE_ORDER.map((r) => {
+    const items = groups[r] || [];
     return `
-      <button class="rubrik-tile type-${r} ${isOpen ? "active" : ""}" data-action="toggle-group" data-type="${r}">
-        ${newCount ? `<span class="rubrik-tile-new">${newCount}</span>` : ""}
-        <span class="rubrik-tile-icon">${RUBRIK_ICON[r]}</span>
-        <span class="rubrik-tile-text">
-          <span class="rubrik-tile-label">${RUBRIK_LABEL[r]}</span>
-          <span class="rubrik-tile-count">${items.length} ${items.length === 1 ? RUBRIK_LABEL[r] : RUBRIK_LABEL_PLURAL[r]}</span>
+      <button class="dash-bubble" data-action="open-rubrik" data-type="${r}">
+        <span class="dash-bubble-icon type-${r}">
+          ${items.length ? `<span class="count-badge">${items.length}</span>` : ""}
+          ${RUBRIK_ICON[r]}
         </span>
+        <span class="dash-bubble-label">${RUBRIK_LABEL[r]}</span>
       </button>`;
   }).join("");
+  return `<div class="dash-bubbles">${bubbles}</div>`;
+}
 
-  let panel = "";
-  if (openRubrik) {
-    const items = groups.get(openRubrik) || [];
-    markSeen(openRubrik);
-    panel = `
-      <section class="rubrik-panel" data-type="${openRubrik}">
-        <div class="rubrik-panel-head type-${openRubrik}">
-          <span class="rubrik-tile-icon">${RUBRIK_ICON[openRubrik]}</span>
-          <span class="group-label">${RUBRIK_LABEL[openRubrik]}</span>
-          <span class="group-count">${items.length}</span>
-        </div>
-        <div class="group-body">${groupBodyHtml(openRubrik, items)}</div>
-      </section>`;
+/* ---------- Termin-Rubrik (Akkordeon-Streifen + Zeitstrahl) ---------- */
+
+const TERMIN_ZEITSTRAHL = [
+  { label: "Diese Woche", max: 6 },
+  { label: "In 2 Wochen", max: 13 },
+  { label: "In 3 Wochen", max: 20 },
+  { label: "Später", max: Infinity },
+];
+
+function renderTermineView(termine) {
+  const head = `
+    <div class="dateien-head">
+      <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
+    </div>`;
+  if (!termine.length) {
+    return head + `<p class="rubrik-panel-empty">Noch keine Termine.</p>`;
   }
 
-  return statsLineHtml(list) + `<div class="rubrik-grid">${tiles}</div>` + panel;
+  const from = todayStart();
+  const buckets = TERMIN_ZEITSTRAHL.map((b) => ({ ...b, items: [] }));
+  for (const c of termine) {
+    const days = Math.round((parseISODate(c.event_date) - from) / 86400000);
+    (buckets.find((b) => days <= b.max) || buckets[buckets.length - 1]).items.push(c);
+  }
+
+  const groupsHtml = buckets.filter((b) => b.items.length).map((b) => `
+    <div class="termine-timeline-group">
+      <div class="termine-timeline-col"><span>${esc(b.label)}</span></div>
+      <div class="termine-timeline-strips">${b.items.map(renderTerminStrip).join("")}</div>
+    </div>`).join("");
+
+  return head + groupsHtml;
+}
+
+function renderTerminStrip(c) {
+  const isOpen = c.id === openTerminId;
+  const d = parseISODate(c.event_date);
+  return `
+    <div class="termin-strip ${isOpen ? "open" : ""}">
+      <button class="termin-strip-head" data-action="toggle-termin-strip" data-card="${c.id}">
+        <span class="termin-strip-title-wrap">
+          <span class="termin-strip-title">${esc(c.title)}</span>
+          <span class="termin-strip-sub">${c.creator_name ? esc(c.creator_name) : ""}</span>
+        </span>
+        <span class="termin-strip-date">
+          <span>${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.</span>
+          ${ICONS.chevron}
+        </span>
+      </button>
+      ${isOpen ? `<div class="termin-strip-body">${renderCard(c)}</div>` : ""}
+    </div>`;
+}
+
+/* ---------- Beteiligung-Rubrik (Umfrage/Liste/Tabelle) ---------- */
+
+function renderBeteiligungView(items) {
+  const head = `
+    <div class="dateien-head">
+      <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
+    </div>`;
+  return head + `<div class="group-body">${items.length
+    ? items.map(renderCard).join("")
+    : `<p class="rubrik-panel-empty">Noch keine Beteiligung.</p>`}</div>`;
 }
 
 /* ---------- Ordner-Unterseite (Rubrik "Datei") ---------- */
 
-// "Neu"-Markierung pro Ordner, rein geräteseitig — wie SEEN_KEY/markSeen
-// oben, nur mit Ordner-Id statt Kartentyp als Schlüssel. "" steht für
-// "Ohne Ordner".
+// "Neu"-Markierung pro Ordner, rein geräteseitig (localStorage) — Schlüssel
+// ist die Ordner-Id, "" steht für "Ohne Ordner".
 const FOLDER_SEEN_KEY = "pinnwand_ordner_gesehen";
 function loadFolderSeen() {
   try { return JSON.parse(localStorage.getItem(FOLDER_SEEN_KEY)) || {}; }
@@ -1128,7 +1171,7 @@ function renderFolderView(dateiCards) {
       const newCount = items.filter((c) => new Date(c.created_at).getTime() > (seen[key] || 0)).length;
       return `
         <button class="folder-tile" data-action="open-folder" data-folder="${esc(key)}">
-          ${newCount ? `<span class="rubrik-tile-new">${newCount}</span>` : ""}
+          ${newCount ? `<span class="count-badge">${newCount}</span>` : ""}
           <span class="folder-tile-icon">${ICONS.folder}</span>
           <span class="folder-tile-label">${esc(name)}</span>
           <span class="folder-tile-count">${items.length} ${items.length === 1 ? "Datei" : "Dateien"}</span>
@@ -1142,7 +1185,7 @@ function renderFolderView(dateiCards) {
           <span class="folder-tile-icon">+</span>
           <span class="folder-tile-label">Neuer Ordner</span>
         </button>`);
-    return backHead("Zurück zur Pinnwand", "dateien-back") + `<div class="folder-grid">${tiles}</div>`;
+    return backHead("Start", "dateien-back") + `<div class="folder-grid">${tiles}</div>`;
   }
 
   const items = dateiCards.filter((c) => (c.folder_id || "") === openFolderId);
@@ -1159,21 +1202,47 @@ function renderFolderView(dateiCards) {
 }
 
 const EMPTY_TEXT = {
-  dashboard: "Nichts Aktuelles im Dashboard.",
-  feed: "Noch nichts an der Pinnwand. Mit dem +-Knopf unten rechts geht's los.",
+  feed: "Noch nichts an der Pinnwand. Mit dem +-Knopf unten geht's los.",
   archiv: "Keine vergangenen Termine.",
   papierkorb: "Der Papierkorb ist leer.",
 };
 
-// Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint — knapp
-// oberhalb der Höhe, ab der die Rubrik-Kacheln (jetzt nicht mehr sticky)
-// aus dem sichtbaren Bereich gescrollt sind.
+// Views mit eigener Leer-Anzeige (Karussell/Kacheln zeigen ihren
+// Leer-Zustand selbst) — der generische Hinweistext ist dort überflüssig.
+const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung"]);
+
+// Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint.
 const SCROLL_TOP_THRESHOLD = 320;
 
 function updateScrollTopButton() {
   if (!elScrollTopBtn) return;
-  const show = view === "feed" && window.scrollY > SCROLL_TOP_THRESHOLD;
+  const show = EIGENE_LEER_ANZEIGE.has(view) && window.scrollY > SCROLL_TOP_THRESHOLD;
   elScrollTopBtn.hidden = !show;
+}
+
+// Merkt sich beim Neu-Rendern (z. B. stille 60-Sekunden-Aktualisierung),
+// welche Hinweis-Karte im Karussell gerade zu sehen war, damit es nicht
+// unter den Fingern zu Slide 1 zurückspringt.
+let hinweisCarouselIndex = 0;
+
+function wireHinweisCarousel() {
+  const el = $("hinweisCarousel");
+  if (!el) return;
+  const slideCount = el.children.length;
+  if (hinweisCarouselIndex >= slideCount) hinweisCarouselIndex = 0;
+  el.scrollLeft = hinweisCarouselIndex * el.clientWidth;
+  const dots = elFeed.querySelectorAll(".hinweis-dot");
+  let ticking = false;
+  el.addEventListener("scroll", () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const w = el.clientWidth || 1;
+      hinweisCarouselIndex = Math.round(el.scrollLeft / w);
+      dots.forEach((d, i) => d.classList.toggle("active", i === hinweisCarouselIndex));
+      ticking = false;
+    });
+  }, { passive: true });
 }
 
 function render() {
@@ -1185,8 +1254,22 @@ function render() {
   if (!loaded) return;
   const list = visibleCards();
 
+  elMain.classList.toggle("has-dash-bubbles", view === "feed");
+  elDashBubbles.hidden = view !== "feed";
+
   if (view === "feed") {
-    elFeed.innerHTML = renderGroupedFeed(list);
+    elFeed.innerHTML = renderStart(list);
+    wireHinweisCarousel();
+    elDashBubbles.innerHTML = renderBubbles({
+      termin: list.filter((c) => c.type === "termin"),
+      beteiligung: list.filter((c) => c.type === "umfrage" || c.type === "liste" || c.type === "tabelle"),
+      datei: list.filter((c) => c.type === "datei"),
+    });
+  } else if (view === "termine") {
+    elFeed.innerHTML = renderTermineView(list.filter((c) => c.type === "termin"));
+  } else if (view === "beteiligung") {
+    elFeed.innerHTML = renderBeteiligungView(
+      list.filter((c) => c.type === "umfrage" || c.type === "liste" || c.type === "tabelle"));
   } else if (view === "dateien") {
     elFeed.innerHTML = renderFolderView(list.filter((c) => c.type === "datei"));
   } else if (view === "papierkorb") {
@@ -1200,10 +1283,8 @@ function render() {
     elFeed.innerHTML = list.map(renderCard).join("");
   }
 
-  // Im Feed und in der Ordner-Unterseite übernimmt das Kachel-Raster selbst
-  // die Leer-Anzeige, der generische Hinweistext ist dort überflüssig.
   elEmpty.textContent = EMPTY_TEXT[view] || "";
-  elEmpty.hidden = view === "feed" || view === "dateien" ? true : list.length > 0;
+  elEmpty.hidden = EIGENE_LEER_ANZEIGE.has(view) ? true : list.length > 0;
 }
 
 /* ---------- Dialoge: Bestätigen und Nachfragen ---------- */
@@ -1404,6 +1485,14 @@ function editorFieldsHtml(type, card) {
     if (!currentClassId) {
       html += `<p class="field-hint">Gemeinsame Dateien (beide Klassen) können aktuell keinem Ordner zugeordnet werden.</p>`;
     }
+  }
+
+  if (["hinweis", "umfrage", "liste", "tabelle"].includes(type)) {
+    html += `
+      <label class="field-check">
+        <input type="checkbox" name="is_aufgabe" ${card && card.is_aufgabe ? "checked" : ""}>
+        <span>Als Aufgabe markieren (erscheint auf der Startseite, jede*r hakt für sich selbst ab)</span>
+      </label>`;
   }
 
   html += fieldHtml("Endet am (optional)",
@@ -1709,6 +1798,7 @@ async function submitEditor() {
     pinned: fd.get("pinned") === "on",
     important: fd.get("important") === "on",
     is_kurznachricht: fd.get("is_kurznachricht") === "on",
+    is_aufgabe: fd.get("is_aufgabe") === "on",
     end_date: String(fd.get("end_date") || ""),
   };
   if (fd.has("class_id")) common.class_id = String(fd.get("class_id") || "");
@@ -1959,15 +2049,14 @@ async function handleFeedClick(ev) {
       break;
     }
     case "jump-to-card": {
+      // Kommt vom "zurück zum Termin"-Chip auf einer verknüpften Karte —
+      // Ziel ist immer ein Termin (siehe linkedBackChipHtml).
       const target = cardById(cardId);
       if (!target) break;
-      if (view === "feed") {
-        const rubrik = RUBRIK_KEY_BY_TYPE[target.type];
-        const panelEl = elFeed.querySelector(`.rubrik-panel[data-type="${CSS.escape(rubrik)}"]`);
-        if (!panelEl) {
-          saveOpenType(rubrik);
-          render();
-        }
+      if (target.type === "termin") {
+        view = "termine";
+        openTerminId = target.id;
+        render();
       }
       requestAnimationFrame(() => {
         const el = elFeed.querySelector(`.card[data-card="${CSS.escape(cardId)}"]`);
@@ -1978,18 +2067,36 @@ async function handleFeedClick(ev) {
       });
       break;
     }
-    case "toggle-group": {
+    // Die drei Bubbles auf der Startseite (Termin/Beteiligung/Datei) sowie
+    // die "Nächster Termin"-Zeile (data-card mitgegeben, um genau diesen
+    // Termin gleich aufgeklappt zu zeigen).
+    case "open-rubrik": {
       const type = btn.dataset.type;
-      // "Datei" bekommt eine eigene Unterseite mit Ordnern statt des
-      // normalen Aufklapp-Panels (siehe renderFolderView).
       if (type === "datei") {
         view = "dateien";
         openFolderId = undefined;
-        render();
-        break;
+      } else if (type === "termin") {
+        view = "termine";
+        openTerminId = btn.dataset.card || null;
+      } else if (type === "beteiligung") {
+        view = "beteiligung";
       }
-      const isOpen = btn.classList.contains("active");
-      saveOpenType(isOpen ? null : type);
+      render();
+      break;
+    }
+    case "toggle-termin-strip": {
+      const id = btn.dataset.card;
+      openTerminId = openTerminId === id ? null : id;
+      render();
+      break;
+    }
+    case "start-back": {
+      view = "feed";
+      render();
+      break;
+    }
+    case "aufgabe-done": {
+      setAufgabeErledigt(btn.dataset.card, true);
       render();
       break;
     }
@@ -2005,11 +2112,6 @@ async function handleFeedClick(ev) {
     }
     case "open-folder": {
       openFolderId = btn.dataset.folder;
-      render();
-      break;
-    }
-    case "open-termin": {
-      openTerminId = btn.dataset.card;
       render();
       break;
     }
@@ -2294,6 +2396,7 @@ async function init() {
   // Feed-Interaktionen
   elFeed.addEventListener("click", handleFeedClick);
   elFeed.addEventListener("change", handleFeedChange);
+  elDashBubbles.addEventListener("click", handleFeedClick);
   elNotice.addEventListener("click", (ev) => {
     if (ev.target.closest('[data-action="retry"]')) reload();
   });

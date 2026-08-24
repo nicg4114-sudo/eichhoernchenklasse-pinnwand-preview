@@ -73,6 +73,7 @@
   --c-beteiligung: #7c5980;
   --line-strong: #d8cbb0;
   --bottom-nav-h: 60px;
+  --dash-bubbles-h: 78px;
 }
 
 /* Zartblaues Design für Besucher, die über den Schmetterlingsklasse-Link
@@ -209,6 +210,13 @@ main {
   padding: 20px 14px calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 24px);
 }
 
+/* Nur auf der Startseite: die schwebenden Bubbles brauchen zusätzlich
+   Platz, damit die letzte Karte beim Runterscrollen nicht darunter
+   verschwindet (siehe .dash-bubbles-float und has-dash-bubbles in app.js). */
+main.has-dash-bubbles {
+  padding-bottom: calc(var(--bottom-nav-h) + var(--dash-bubbles-h) + env(safe-area-inset-bottom) + 24px);
+}
+
 .notice {
   background: #fff8e9;
   border: 1px solid #ecdfb8;
@@ -249,60 +257,9 @@ main {
   font-weight: 600;
 }
 
-/* Farbige Kacheln im Raster (2 Spalten). Antippen öffnet darunter, unter
-   dem ganzen Raster, den Inhalt der gewählten Rubrik (siehe .rubrik-panel
-   weiter unten). Scrollt bewusst normal mit der Seite mit (nicht mehr
-   sticky), damit auf dem Handy mehr Platz für den eigentlichen Inhalt
-   bleibt — der "Nach oben"-Button (siehe .scroll-top-btn) bringt die
-   Kacheln bei Bedarf wieder in Sicht. */
-.rubrik-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.rubrik-tile {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 0;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 14px;
-  color: #fff;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  box-shadow: var(--shadow);
-  transition: box-shadow .15s ease;
-}
-.rubrik-tile:hover { box-shadow: var(--shadow-lg); }
-.rubrik-tile.active { box-shadow: 0 0 0 3px var(--ink), var(--shadow-lg); }
-
-.rubrik-tile.type-hinweis     { background: var(--c-hinweis); }
-.rubrik-tile.type-termin      { background: var(--c-termin); }
-.rubrik-tile.type-beteiligung { background: var(--c-beteiligung); }
-.rubrik-tile.type-datei       { background: var(--c-datei); }
-
-.rubrik-tile-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 auto;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, .22);
-}
-.rubrik-tile-icon svg { width: 14px; height: 14px; display: block; }
-
-.rubrik-tile-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.rubrik-tile-label { font-weight: 800; font-size: .86rem; line-height: 1.2; }
-.rubrik-tile-count { font-size: .72rem; font-weight: 600; opacity: .9; line-height: 1.2; }
-
-.rubrik-tile-new {
+/* Kleine Zähler-Blase (neue Einträge, Dateianzahl etc.) — auf Ordner-
+   Kacheln und den Start-Bubbles verwendet. */
+.count-badge {
   position: absolute;
   top: -6px;
   right: -6px;
@@ -315,71 +272,7 @@ main {
   box-shadow: var(--shadow);
 }
 
-/* Geöffnete Rubrik: eine über die volle Breite laufende Karte. Da die
-   Übersicht bei jedem Klick komplett neu gerendert wird (kein reines
-   Klassen-Toggle), lässt sich der Übergang nicht per CSS-Transition
-   animieren — stattdessen läuft beim Einfügen eine kurze Keyframe-
-   Animation. Bewusst NUR mit opacity (kein transform): ein transform auf
-   einem Element direkt unter einer position:sticky-Kachelreihe führt in
-   Chrome während des Scrollens zu Ruckeln/Reißen, weil es einen eigenen
-   Compositing-Layer erzwingt, der mit dem Sticky-Element kollidiert. */
-@keyframes rubrikPanelIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes rubrikBodyIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-/* Panel steht jetzt außerhalb des Rasters, direkt darunter — die Kacheln
-   selbst bleiben unverändert stehen (siehe .rubrik-tile.active oben für
-   die Markierung, welche Rubrik gerade offen ist). */
-.rubrik-panel {
-  margin-top: 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-  animation: rubrikPanelIn .3s ease both;
-}
-
-.rubrik-panel .group-body {
-  animation: rubrikBodyIn .35s ease .06s both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rubrik-panel, .rubrik-panel .group-body { animation: none; }
-}
-
-.rubrik-panel-head {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  color: #fff;
-}
-.rubrik-panel-head.type-hinweis     { background: var(--c-hinweis); }
-.rubrik-panel-head.type-termin      { background: var(--c-termin); }
-.rubrik-panel-head.type-beteiligung { background: var(--c-beteiligung); }
-.rubrik-panel-head.type-datei       { background: var(--c-datei); }
-
-.rubrik-panel-head .rubrik-tile-icon { background: rgba(255, 255, 255, .22); }
-.rubrik-panel-head .group-label { color: #fff; }
-.rubrik-panel-head .group-count { color: #fff; background: rgba(255, 255, 255, .22); }
-
 .group-label { font-weight: 800; font-size: 1rem; }
-
-.group-count {
-  color: var(--muted);
-  font-size: .87rem;
-  font-weight: 600;
-  background: var(--bg);
-  border-radius: 999px;
-  padding: 2px 9px;
-}
 
 .group-body {
   display: flex;
@@ -387,6 +280,7 @@ main {
   gap: 10px;
   padding: 10px;
   background: var(--bg);
+  border-radius: var(--radius);
 }
 
 .group-body > .card {
@@ -404,56 +298,225 @@ main {
   font-size: .92rem;
 }
 
-/* ---------- Termin-Rubrik: 2-Spalten-Raster zum Aufklappen ---------- */
+/* ---------- Start-Dashboard ---------- */
 
-/* Kompakte Kacheln für alle Termine (siehe renderTerminGroupBody) — Antippen
-   klappt darunter die volle Karte auf (normale, dezente Kartenoptik statt
-   einer knalligen Sonderfarbe). */
-.termin-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.termin-tile {
+.dash-section-label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  background: var(--card);
-  border-radius: var(--radius-sm);
+  gap: 5px;
+  font-size: .74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  margin: 16px 2px 8px;
+}
+.dash-section-label:first-child { margin-top: 0; }
+.dash-section-label.warn { color: var(--important); }
+.dash-section-label svg { width: 13px; height: 13px; }
+
+/* Hinweis-Karussell: eine Karte je Bildschirmbreite, per Scroll-Snap
+   wischbar, Punkte darunter zeigen Position/Anzahl. */
+.hinweis-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  gap: 0;
+  scrollbar-width: none;
+  border-radius: var(--radius);
+}
+.hinweis-carousel::-webkit-scrollbar { display: none; }
+.hinweis-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  min-width: 0;
+}
+.hinweis-slide > .card, .hinweis-slide > .kurz-bubble {
+  margin: 0;
+  height: 100%;
+}
+.hinweis-dots {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin: 8px 0 4px;
+}
+.hinweis-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.hinweis-dot.active { background: var(--accent); }
+
+/* Nächster Termin — farbige Hervorhebung, führt zur Termin-Rubrik. */
+.naechster-termin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--c-termin);
+  color: #fff;
+  padding: 12px 14px;
   cursor: pointer;
   text-align: left;
   font: inherit;
-  transition: border-color .15s ease, background .15s ease;
 }
-.termin-tile:hover { border-color: var(--c-termin); }
-.termin-tile.active { border-color: var(--c-termin); background: var(--accent-bg); }
-
-.termin-tile-date {
+.naechster-termin-date {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 32px;
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
-  line-height: 1.15;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .22);
+  line-height: 1.1;
 }
-.termin-tile-date b { font-size: .92rem; color: var(--c-termin); }
-.termin-tile-date span { font-size: .6rem; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.naechster-termin-date b { font-size: 1.05rem; }
+.naechster-termin-date span { font-size: .62rem; text-transform: uppercase; }
+.naechster-termin-title { font-weight: 800; font-size: .95rem; }
+.naechster-termin-time { font-size: .8rem; opacity: .9; }
 
-.termin-tile-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.termin-tile-title {
-  font-size: .8rem;
-  font-weight: 700;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* Offene Aufgaben — dezent, mit Warnfarbe im Etikett, klarer Button. */
+.aufgaben-list { display: flex; flex-direction: column; gap: 8px; }
+.aufgabe-card {
+  border: 1px solid var(--important-bg);
+  background: var(--important-bg);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
 }
-.termin-tile-rel { font-size: .68rem; color: var(--muted); }
+.aufgabe-card-title { font-weight: 800; font-size: .92rem; color: var(--ink); }
+.aufgabe-card-sub { font-size: .78rem; color: var(--muted); margin: 2px 0 8px; }
+
+/* Kleines "Aufgabe"-Kennzeichen auf einer normalen Karte, siehe renderCard. */
+.card-aufgabe {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--important);
+}
+.card-aufgabe svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.card-aufgabe.done { color: var(--ok); }
+.card-aufgabe .btn { margin-left: auto; }
+
+/* Fest positionierter Bereich über der Fußleiste, technisch getrennt vom
+   scrollbaren Feed (#dashBubbles in index.html, gefüllt in render()). Bildet
+   zusammen mit .bottom-nav optisch eine zusammenhängende Zone — gleicher
+   Hintergrund, kein Rand dazwischen. pointer-events:none lässt Klicks/Scroll
+   in den Lücken zum Feed darunter durch, nur die Bubbles selbst sind aktiv. */
+.dash-bubbles-float {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+  z-index: 25;
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--card);
+  pointer-events: none;
+}
+
+/* Innere Reihe der drei Bubbles — Zugang zu Termin/Beteiligung/Datei,
+   siehe renderBubbles. */
+.dash-bubbles {
+  display: flex;
+  justify-content: space-around;
+  padding: 6px 10px 4px;
+  pointer-events: auto;
+}
+.dash-bubble {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  color: var(--muted);
+}
+.dash-bubble-icon {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+.dash-bubble-icon svg { width: 21px; height: 21px; }
+.dash-bubble-icon.type-termin      { background: var(--c-termin); }
+.dash-bubble-icon.type-beteiligung { background: var(--c-beteiligung); }
+.dash-bubble-icon.type-datei       { background: var(--c-datei); }
+.dash-bubble-label { font-size: .74rem; font-weight: 600; }
+
+/* ---------- Termin-Rubrik: Akkordeon-Streifen mit Zeitstrahl ---------- */
+
+.termine-timeline-group { display: flex; gap: 10px; margin-bottom: 8px; }
+.termine-timeline-col {
+  flex: 0 0 auto;
+  width: 16px;
+  display: flex;
+  justify-content: center;
+  padding-top: 6px;
+}
+.termine-timeline-col span {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: .64rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.termine-timeline-strips { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.termin-strip {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--c-termin);
+  background: var(--card);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.termin-strip-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 10px 12px;
+  color: var(--ink);
+}
+.termin-strip-title { font-weight: 800; font-size: .88rem; }
+.termin-strip-sub { font-size: .76rem; color: var(--muted); margin-top: 1px; }
+.termin-strip-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  font-size: .8rem;
+  color: var(--muted);
+}
+.termin-strip-date svg { width: 13px; height: 13px; transition: transform .15s ease; }
+.termin-strip.open .termin-strip-date svg { transform: rotate(90deg); }
+.termin-strip-body { padding: 0 10px 10px; }
+.termin-strip-body > .card { margin: 0; border: none; padding: 0; box-shadow: none; }
 
 /* ---------- Hinweis-Rubrik: Kurznachrichten-Feed ---------- */
 
@@ -524,7 +587,6 @@ main {
 .folder-tile-icon svg { width: 16px; height: 16px; }
 .folder-tile-label { font-weight: 800; font-size: .9rem; }
 .folder-tile-count { font-size: .78rem; color: var(--muted); font-weight: 600; }
-.folder-tile .rubrik-tile-new { color: #fff; background: var(--accent); }
 
 .folder-tile-new {
   align-items: center;
@@ -1029,18 +1091,22 @@ main {
 
 .bn-gap { flex: 1 1 0; }
 
+/* Bleibt innerhalb der Fußleiste (kein Herausragen nach oben mehr) — die
+   Bubbles schweben jetzt als eigener fester Bereich direkt darüber
+   (.dash-bubbles-float, dessen Unterkante genau an der Fußleisten-Oberkante
+   endet), da würde jedes Herausragen des Buttons wieder hineinreichen. */
 .fab {
   position: absolute;
   left: 50%;
-  top: -20px;
+  top: 4px;
   transform: translateX(-50%);
-  width: 54px;
-  height: 54px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   border: none;
   background: var(--accent);
   color: #fff;
-  font-size: 1.9rem;
+  font-size: 1.8rem;
   line-height: 1;
   cursor: pointer;
   box-shadow: 0 8px 22px -4px rgba(177, 85, 42, .55);
@@ -1371,7 +1437,6 @@ main {
   .topbar h1 { font-size: 1.1rem; }
   .card { padding: 13px 14px 11px; }
   .items.abhaken li { grid-template-columns: 1fr 96px; }
-  .rubrik-panel-head { padding: 12px 14px; gap: 8px; }
-  .rubrik-tile-icon { width: 28px; height: 28px; }
   .group-label { font-size: .95rem; }
+  .dash-bubble-icon { width: 44px; height: 44px; }
 }

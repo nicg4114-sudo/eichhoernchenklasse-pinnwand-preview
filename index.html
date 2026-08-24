@@ -35,13 +35,17 @@
   <p id="empty" class="empty" hidden></p>
 </main>
 
+<!-- Schwebt fest über der Fußleiste (nur auf der Startseite) — mit ihr
+     zusammen ein von der scrollbaren Pinnwand klar getrennter Bereich. -->
+<div id="dashBubbles" class="dash-bubbles-float" hidden></div>
+
 <!-- Feste Fußleiste (statt des früheren ☰-Menüs) — Ansichten links/rechts
      vom Plus-Button, der die Leiste leicht überragt. -->
 <nav class="bottom-nav" id="viewTabs" aria-label="Navigation">
   <button data-view="dashboard" hidden>Dashboard</button>
-  <button class="bn-btn active" data-view="feed" title="Pinnwand" aria-label="Pinnwand">
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="6" height="6" rx="1.2"/><rect x="11" y="3" width="6" height="6" rx="1.2"/><rect x="3" y="11" width="6" height="6" rx="1.2"/><rect x="11" y="11" width="6" height="6" rx="1.2"/></svg>
-    <span class="bn-label">Pinnwand</span>
+  <button class="bn-btn active" data-view="feed" title="Start" aria-label="Start">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 9.2L10 3.5l6.8 5.7"/><path d="M4.8 8v7.5a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1V8"/></svg>
+    <span class="bn-label">Start</span>
   </button>
   <button class="bn-btn" data-view="archiv" title="Archiv" aria-label="Archiv">
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="4" width="14" height="4" rx="1"/><path d="M4.2 8v6.5a1 1 0 0 0 1 1h9.6a1 1 0 0 0 1-1V8"/><line x1="8" y1="11" x2="12" y2="11"/></svg>
