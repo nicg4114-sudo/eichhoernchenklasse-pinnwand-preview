@@ -1007,8 +1007,7 @@ function renderStart(list) {
   return statsLineHtml(list)
     + renderWillkommen(termine)
     + renderHinweisCarousel(hinweise)
-    + renderNaechsterTermin(termine)
-    + renderOffeneAufgaben(list);
+    + renderTerminAufgabenRow(termine, list);
 }
 
 // Begrüßungsblock ganz oben: Klassenname automatisch aus activeClassId
@@ -1016,7 +1015,7 @@ function renderStart(list) {
 // der Seitentitel. Die Elternabend-Zeile erkennt die App selbst — kein
 // eigenes Feld dafür, einfach der zeitlich nächste (noch nicht abgelaufene,
 // termine enthält dank visibleCards() ohnehin nur solche) Termin, dessen
-// Titel "Elternabend" enthält. Bewusst unabhängig von renderNaechsterTermin
+// Titel "Elternabend" enthält. Bewusst unabhängig von renderTerminAufgabenRow
 // darunter, das ja jeden beliebigen Termintyp zeigen kann.
 function renderWillkommen(termine) {
   const cls = classesList.find((c) => c.id === activeClassId);
@@ -1056,44 +1055,38 @@ function renderHinweisCarousel(hinweise) {
   return `<div class="hinweis-carousel" id="hinweisCarousel">${slides}</div>${dots}`;
 }
 
-// Farbig hervorgehobene Zeile für den zeitlich nächsten Termin — Antippen
-// führt zur Termin-Rubrik mit genau diesem Termin aufgeklappt.
-function renderNaechsterTermin(termine) {
-  if (!termine.length) return "";
+// Zwei schlanke Kacheln nebeneinander statt zweier gestapelter Vollbreite-
+// Abschnitte — spart deutlich Höhe. Antippen der Termin-Kachel führt zur
+// Termin-Rubrik mit genau diesem Termin aufgeklappt; die Aufgaben-Kachel
+// ist bewusst rein informativ (nur die Anzahl), ohne eigenes Aufklappen —
+// erledigt wird direkt auf der jeweiligen Karte markiert (siehe
+// aufgabeBlockHtml), dort wo man sie beim Durchsehen ohnehin sieht. Gibt
+// es keinen anstehenden Termin, nimmt die Aufgaben-Kachel die volle
+// Breite ein, statt eine leere Hälfte zu zeigen.
+function renderTerminAufgabenRow(termine, list) {
   const next = [...termine].sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))[0];
-  const d = parseISODate(next.event_date);
-  return `
-    <div class="dash-section-label">Nächster Termin</div>
-    <button class="naechster-termin" data-action="open-rubrik" data-type="termin" data-card="${next.id}">
-      <span class="naechster-termin-date"><b>${d.getDate()}</b><span>${MONTH_SHORT[d.getMonth()]}</span></span>
-      <span class="naechster-termin-text">
-        <span class="naechster-termin-title">${esc(next.title)}</span>
-        <span class="naechster-termin-time">${next.event_time ? esc(fmtTime(next.event_time)) + " Uhr" : ""}</span>
-      </span>
-    </button>`;
-}
-
-// Karten mit is_aufgabe, die auf diesem Gerät noch nicht erledigt sind
-// (siehe AUFGABEN_ERLEDIGT_KEY). Bleibt bewusst dauerhaft auf dem
-// Dashboard sichtbar, auch ohne offene Aufgabe — mit ruhigem Leerzustand
-// statt ganz zu verschwinden, damit die Rubrik als fester Anlaufpunkt
-// erkennbar bleibt.
-function renderOffeneAufgaben(list) {
   const open = list.filter((c) => c.is_aufgabe && !isAufgabeErledigt(c.id));
-  if (!open.length) {
-    return `
-      <div class="dash-section-label">Aufgaben</div>
-      <div class="aufgaben-list-empty">${ICONS.check} Keine offenen Aufgaben</div>`;
+
+  let terminTile = "";
+  if (next) {
+    const d = parseISODate(next.event_date);
+    terminTile = `
+      <button class="dash-tile dash-tile-termin" data-action="open-rubrik" data-type="termin" data-card="${next.id}">
+        <span class="dash-tile-termin-date">${d.getDate()}. ${MONTH_SHORT[d.getMonth()]}</span>
+        <span class="dash-tile-termin-title">${esc(next.title)}</span>
+        ${next.event_time ? `<span class="dash-tile-termin-time">${esc(fmtTime(next.event_time))} Uhr</span>` : ""}
+      </button>`;
   }
-  const cardsHtml = open.map((c) => `
-    <div class="aufgabe-card">
-      <div class="aufgabe-card-title">${esc(c.title)}</div>
-      <div class="aufgabe-card-sub">${TYPE_LABELS[c.type]}${c.creator_name ? " · " + esc(c.creator_name) : ""}</div>
-      <button type="button" class="btn small" data-action="aufgabe-done" data-card="${c.id}">Für mich erledigt</button>
-    </div>`).join("");
-  return `
-    <div class="dash-section-label warn">${open.length === 1 ? "Offene Aufgabe" : "Offene Aufgaben"} ${ICONS.warning}</div>
-    <div class="aufgaben-list">${cardsHtml}</div>`;
+
+  const aufgabenTile = `
+    <div class="dash-tile dash-tile-aufgaben ${open.length ? "" : "empty"}">
+      <span class="dash-tile-aufgaben-label">Aufgaben</span>
+      <span class="dash-tile-aufgaben-count">${open.length
+        ? (open.length === 1 ? "1 offene Aufgabe" : `${open.length} offene Aufgaben`)
+        : "Keine offenen Aufgaben"}</span>
+    </div>`;
+
+  return `<div class="dash-tile-row${next ? "" : " single"}">${terminTile}${aufgabenTile}</div>`;
 }
 
 // Drei Bubbles, Zugang zu den vollen Rubrik-Ansichten (Termin/Beteiligung/

@@ -436,63 +436,63 @@ main.has-dash-bubbles {
 }
 .hinweis-dot.active { background: var(--accent); }
 
-/* Nächster Termin — farbige Hervorhebung, führt zur Termin-Rubrik. */
-.naechster-termin {
+/* Zwei schlanke Kacheln nebeneinander: Nächster Termin + Aufgaben (nur
+   Anzahl, erledigt wird direkt auf der jeweiligen Karte markiert, siehe
+   card-aufgabe weiter unten) — siehe renderTerminAufgabenRow. Spart
+   deutlich Höhe gegenüber zwei gestapelten Vollbreite-Abschnitten. Ohne
+   anstehenden Termin nimmt die Aufgaben-Kachel die volle Breite ein
+   (.dash-tile-row.single), statt eine leere Hälfte zu zeigen. */
+.dash-tile-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: var(--dash-gap);
+}
+.dash-tile-row.single { grid-template-columns: 1fr; }
+.dash-tile {
+  border-radius: var(--radius-sm);
+  padding: 11px 12px;
+  min-width: 0;
+}
+.dash-tile-termin {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 2px;
   width: 100%;
   border: none;
-  border-radius: var(--radius);
   background: var(--c-termin);
   color: #fff;
-  padding: 12px 14px;
   cursor: pointer;
   text-align: left;
   font: inherit;
 }
-.naechster-termin-date {
+.dash-tile-termin-date { font-size: .68rem; font-weight: 700; text-transform: uppercase; opacity: .9; }
+.dash-tile-termin-title {
+  font-weight: 800;
+  font-size: .85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-tile-termin-time { font-size: .74rem; opacity: .9; }
+
+.dash-tile-aufgaben {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 auto;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, .22);
-  line-height: 1.1;
-}
-.naechster-termin-date b { font-size: 1.05rem; }
-.naechster-termin-date span { font-size: .62rem; text-transform: uppercase; }
-.naechster-termin-title { font-weight: 800; font-size: .95rem; }
-.naechster-termin-time { font-size: .8rem; opacity: .9; }
-
-/* Offene Aufgaben — dezent, mit Warnfarbe im Etikett, klarer Button. */
-.aufgaben-list { display: flex; flex-direction: column; gap: 8px; }
-.aufgabe-card {
+  gap: 4px;
   border: 1px solid var(--important-bg);
   background: var(--important-bg);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
 }
-.aufgabe-card-title { font-weight: 800; font-size: .92rem; color: var(--ink); }
-.aufgabe-card-sub { font-size: .78rem; color: var(--muted); margin: 2px 0 8px; }
-
-/* Leerzustand, wenn gerade keine Aufgabe offen ist — Rubrik bleibt trotzdem
-   sichtbar (siehe renderOffeneAufgaben), nur ruhig statt in Warnfarbe. */
-.aufgaben-list-empty {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid var(--line);
-  background: var(--line-soft);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  font-size: .84rem;
-  color: var(--muted);
+.dash-tile-aufgaben.empty { border-color: var(--line); background: var(--line-soft); }
+.dash-tile-aufgaben-label {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--important);
 }
-.aufgaben-list-empty svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--ok); }
+.dash-tile-aufgaben.empty .dash-tile-aufgaben-label { color: var(--muted); }
+.dash-tile-aufgaben-count { font-size: .84rem; font-weight: 700; color: var(--ink); }
 
 /* Kleines "Aufgabe"-Kennzeichen auf einer normalen Karte, siehe renderCard. */
 .card-aufgabe {
