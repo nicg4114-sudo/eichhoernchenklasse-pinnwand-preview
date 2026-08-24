@@ -73,7 +73,20 @@
   --c-beteiligung: #7c5980;
   --line-strong: #d8cbb0;
   --bottom-nav-h: 60px;
+  /* Fließende Dashboard-Skalierung nach Bildschirmhöhe (dvh): zwischen
+     600px (kleine Handys, z. B. iPhone SE) und 860px (große Handys)
+     wandert --dash-scale linear von 0.6 auf 1 — darunter/darüber bleibt
+     es an der jeweiligen Grenze stehen. Alle Dashboard-Abstände unten
+     rechnen ihren Ursprungswert mal --dash-scale, damit bei 1 exakt das
+     bisherige Design rauskommt und es zu kleinen Bildschirmen hin gleich-
+     mäßig kompakter wird. Jeweils erste Zeile ist der Fallback für
+     Browser ohne dvh-Unterstützung (dann gilt der feste alte Wert). */
   --dash-bubbles-h: 78px;
+  --dash-bubbles-h: clamp(64px, calc(31px + 5.4dvh), 78px);
+  --dash-scale: 1;
+  --dash-scale: clamp(.6, calc(.6 + (100dvh - 600px) / 260px * .4), 1);
+  --dash-gap: 16px;
+  --dash-gap: calc(var(--dash-scale) * 16px);
 }
 
 /* Zartblaues Design für Besucher, die über den Schmetterlingsklasse-Link
@@ -309,9 +322,9 @@ main.has-dash-bubbles {
 
 /* Begrüßungsblock ganz oben, siehe renderWillkommen. */
 .willkommen {
-  padding: 0 2px 16px;
+  padding: 0 2px var(--dash-gap);
   border-bottom: 1px solid var(--line);
-  margin-bottom: 16px;
+  margin-bottom: var(--dash-gap);
 }
 .willkommen-title { font-size: 1.05rem; font-weight: 800; color: var(--ink); line-height: 1.35; }
 .willkommen-sub { font-size: .82rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
@@ -323,7 +336,7 @@ main.has-dash-bubbles {
   color: var(--accent-dk);
   border-radius: var(--radius-sm);
   padding: 9px 12px;
-  margin-top: 12px;
+  margin-top: var(--dash-gap);
   font-size: .8rem;
   font-weight: 600;
 }
@@ -338,7 +351,7 @@ main.has-dash-bubbles {
   text-transform: uppercase;
   letter-spacing: .04em;
   color: var(--muted);
-  margin: 16px 2px 8px;
+  margin: var(--dash-gap) 2px calc(var(--dash-gap) / 2);
 }
 .dash-section-label:first-child { margin-top: 0; }
 .dash-section-label.warn { color: var(--important); }
@@ -372,6 +385,23 @@ main.has-dash-bubbles {
   border-radius: var(--radius-sm);
   box-shadow: 0 4px 10px -4px rgba(38, 28, 12, .18);
   transform: rotate(-.6deg);
+}
+/* Eigener, fließender Innenabstand statt der geerbten .card-Fixwerte
+   (16/18/14px) — schrumpft auf niedrigen Bildschirmen mit, Maximalwert
+   entspricht den bisherigen festen Werten. Nur die volle Hinweis-Karte,
+   nicht .kurz-bubble — die soll kompakt bleiben wie überall sonst. */
+.hinweis-slide > .card {
+  padding: calc(var(--dash-scale) * 16px) calc(var(--dash-scale) * 18px) calc(var(--dash-scale) * 14px);
+}
+/* Die Ersteller-/Zeitzeile wird hier schnell zwei- bis dreizeilig und
+   frisst unnötig Höhe — im Karussell auf eine Zeile mit "…" kürzen statt
+   ganz zu verstecken (voller Text bleibt sichtbar, sobald die Karte
+   nicht mehr im schmalen Karussell, sondern z. B. nach dem Bearbeiten
+   normal angezeigt wird). */
+.hinweis-slide > .card .card-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Höhere Selektor-Genauigkeit nötig, um die Typ-Farbakzent-Regel weiter
    unten (.card:has(.type-badge.hinweis), Zeile ~617) zu überstimmen —
@@ -502,7 +532,7 @@ main.has-dash-bubbles {
 .dash-bubbles {
   display: flex;
   justify-content: space-around;
-  padding: 6px 10px 4px;
+  padding: calc(var(--dash-scale) * 6px) 10px calc(var(--dash-scale) * 4px);
   pointer-events: auto;
 }
 .dash-bubble {
@@ -518,8 +548,8 @@ main.has-dash-bubbles {
 }
 .dash-bubble-icon {
   position: relative;
-  width: 50px;
-  height: 50px;
+  width: clamp(42px, calc(23.5px + 3.08dvh), 50px);
+  height: clamp(42px, calc(23.5px + 3.08dvh), 50px);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1527,5 +1557,4 @@ main.has-dash-bubbles {
   .card { padding: 13px 14px 11px; }
   .items.abhaken li { grid-template-columns: 1fr 96px; }
   .group-label { font-size: .95rem; }
-  .dash-bubble-icon { width: 44px; height: 44px; }
 }
