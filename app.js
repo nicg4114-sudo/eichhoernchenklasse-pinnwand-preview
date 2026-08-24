@@ -76,6 +76,17 @@ const RUBRIK_ICON = { termin: ICONS.termin, beteiligung: ICONS.beteiligung, date
 // sich seit dem letzten Besuch etwas geändert hat (siehe checkForNewVersion).
 const VERSIONS = [
   {
+    version: "24.08.2026",
+    items: [
+      "Neu: Begrüßungstext oben auf der Startseite — nennt automatisch die Klasse und zeigt den nächsten Elternabend an, sobald ein Termin mit diesem Namen ansteht.",
+      "Der aktuelle Hinweis ist jetzt wie ein angepinnter Zettel gestaltet, deutlich abgesetzt vom Rest der Startseite.",
+      "Nächster Termin und Aufgaben stehen jetzt als zwei schlanke Kacheln nebeneinander statt untereinander — mehr passt auf einen Blick.",
+      "Das Dashboard passt sich jetzt der Bildschirmgröße an, damit möglichst alles ohne Scrollen sichtbar ist.",
+      "Der „Nach oben\"-Pfeil erscheint jetzt erst nach längerem Scrollen und überdeckt nicht mehr die drei Bubbles.",
+      "Neu: gemeinsame Ordner in der Datei-Rubrik (🏫) — Ordner lassen sich jetzt auch für beide Klassen zusammen anlegen, nicht mehr nur für eine einzelne.",
+    ],
+  },
+  {
     version: "22.08.2026",
     items: [
       "Neu: Ordner in der Datei-Rubrik — Dateien lassen sich jetzt in Ordnern sammeln.",
