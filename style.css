@@ -1166,14 +1166,16 @@ main.has-dash-bubbles {
 }
 .fab:hover { background: var(--accent-dk); transform: translateX(-50%) translateY(-2px); }
 
-/* Erscheint erst nach etwas Scroll-Distanz im Pinnwand-Tab (siehe
-   updateScrollTopButton in app.js) — bringt die Rubrik-Kacheln, die beim
-   Scrollen jetzt mit durchlaufen statt fest zu kleben, bei Bedarf wieder
-   in Sicht. Sitzt über der Fußleiste, nicht dahinter. */
+/* Erscheint erst nach längerer Scroll-Distanz (siehe SCROLL_TOP_THRESHOLD
+   in app.js) und bringt bei Bedarf wieder nach oben. Der bottom-Wert
+   berücksichtigt bewusst auch --dash-bubbles-h, nicht nur die Fußleiste —
+   sonst läge der Button auf der Startseite über den schwebenden Bubbles
+   (siehe .dash-bubbles-float). Andere Ansichten haben keine Bubbles,
+   bekommen dadurch nur etwas mehr Abstand nach unten, was nicht stört. */
 .scroll-top-btn {
   position: fixed;
   left: 20px;
-  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 14px);
+  bottom: calc(var(--bottom-nav-h) + var(--dash-bubbles-h) + env(safe-area-inset-bottom) + 14px);
   width: 46px;
   height: 46px;
   border-radius: 50%;

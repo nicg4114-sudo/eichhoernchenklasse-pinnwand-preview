@@ -1251,8 +1251,10 @@ const EMPTY_TEXT = {
 // Leer-Zustand selbst) — der generische Hinweistext ist dort überflüssig.
 const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung"]);
 
-// Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint.
-const SCROLL_TOP_THRESHOLD = 320;
+// Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint — bewusst
+// höher als eine Bildschirmhöhe, damit er nicht schon nach kurzem Scrollen
+// auftaucht, sondern nur wenn man wirklich weiter unten ist.
+const SCROLL_TOP_THRESHOLD = 600;
 
 function updateScrollTopButton() {
   if (!elScrollTopBtn) return;
