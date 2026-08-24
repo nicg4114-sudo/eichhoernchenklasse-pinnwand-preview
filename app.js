@@ -1244,8 +1244,10 @@ function renderFolderView(dateiCards) {
           <span class="folder-tile-count">${items.length} ${items.length === 1 ? "Datei" : "Dateien"}</span>
         </button>`;
     };
-    const foldersHere = foldersList.filter((f) => !activeClassId || f.class_id === activeClassId);
-    const tiles = foldersHere.map((f) => folderTile(f.id, f.name)).join("")
+    // Gemeinsame Ordner (class_id null) sind in jeder Klassenansicht
+    // sichtbar — gleiches Prinzip wie inActiveClass() bei Karten.
+    const foldersHere = foldersList.filter((f) => !activeClassId || !f.class_id || f.class_id === activeClassId);
+    const tiles = foldersHere.map((f) => folderTile(f.id, f.class_id ? f.name : `🏫 ${f.name}`)).join("")
       + folderTile("", "Ohne Ordner")
       + (classLocked ? "" : `
         <button class="folder-tile folder-tile-new" data-action="create-folder">
@@ -1446,13 +1448,15 @@ function richEditorFieldHtml(card, label) {
     </div>`;
 }
 
-// Ordner-Optionen für eine Datei-Karte, gefiltert auf die gewählte Klasse
-// (Ordner gehören zu genau einer Klasse) — auch für den change-Listener auf
-// dem Klasse-Feld in openEditor() genutzt, wenn die Klasse umgestellt wird.
+// Ordner-Optionen für eine Datei-Karte, gefiltert auf die gewählte Klasse.
+// Gemeinsame Ordner (class_id null, seit Migration 017) passen zu jeder
+// Klasse; für eine gemeinsame Datei (classId "") bleiben nur sie übrig.
+// Auch für den change-Listener auf dem Klasse-Feld in openEditor() genutzt,
+// wenn die Klasse umgestellt wird.
 function folderOptionsHtml(classId, selectedId) {
   const opts = foldersList
-    .filter((f) => f.class_id === classId)
-    .map((f) => `<option value="${f.id}" ${f.id === selectedId ? "selected" : ""}>${esc(f.name)}</option>`);
+    .filter((f) => !f.class_id || f.class_id === classId)
+    .map((f) => `<option value="${f.id}" ${f.id === selectedId ? "selected" : ""}>${f.class_id ? esc(f.name) : `🏫 ${esc(f.name)}`}</option>`);
   return `<option value="">Ohne Ordner</option>${opts.join("")}`;
 }
 
@@ -1551,9 +1555,7 @@ function editorFieldsHtml(type, card) {
   if (type === "datei") {
     const currentFolderId = card ? (card.folder_id || "") : "";
     html += fieldHtml("Ordner", `<select name="folder_id" id="editorFolderSelect">${folderOptionsHtml(currentClassId, currentFolderId)}</select>`);
-    if (!currentClassId) {
-      html += `<p class="field-hint">Gemeinsame Dateien (beide Klassen) können aktuell keinem Ordner zugeordnet werden.</p>`;
-    }
+    html += `<p class="field-hint">Ordner mit 🏫 sind gemeinsam (beide Klassen).</p>`;
   }
 
   if (["hinweis", "umfrage", "liste", "tabelle"].includes(type)) {
@@ -2069,8 +2071,8 @@ async function handleFeedClick(ev) {
       const c = cardById(cardId);
       if (!c) break;
       const opts = [{ value: "", label: "Ohne Ordner" }].concat(
-        foldersList.filter((f) => f.class_id === c.class_id)
-          .map((f) => ({ value: f.id, label: f.name })));
+        foldersList.filter((f) => !f.class_id || f.class_id === c.class_id)
+          .map((f) => ({ value: f.id, label: f.class_id ? f.name : `🏫 ${f.name}` })));
       const vals = await promptDlg("Datei verschieben",
         [{ name: "folder_id", label: "Ordner", value: c.folder_id || "", options: opts }]);
       if (!vals) break;
@@ -2191,19 +2193,18 @@ async function handleFeedClick(ev) {
       break;
     }
     case "create-folder": {
-      if (!activeClassId) {
-        toast("Bitte zuerst oben eine Klasse auswählen, für die der Ordner gilt.", true);
-        break;
-      }
+      const classOpts = [{ value: "", label: "🏫 Gemeinsam (beide Klassen)" }].concat(
+        classesList.map((cl) => ({ value: cl.id, label: `${CLASS_ICON[cl.slug] || ""} ${cl.name}` })));
       const vals = await promptDlg("Neuer Ordner", [
         { name: "name", label: "Ordnername", placeholder: "z. B. Elternabend Fotos", maxlength: 60 },
+        { name: "class_id", label: "Gilt für", value: activeClassId || "", options: classOpts },
         { name: "creator_name", label: "Dein Name bzw. deine Funktion", placeholder: "z. B. Frau Müller, Lehrkraft",
           maxlength: 80, value: localStorage.getItem(CREATOR_NAME_KEY) || "" },
       ]);
       if (!vals) break;
       localStorage.setItem(CREATOR_NAME_KEY, vals.creator_name);
       await doAction(() => rpc("create_folder",
-        { p_class_id: activeClassId, p_name: vals.name, p_creator_name: vals.creator_name }), "Ordner angelegt.");
+        { p_class_id: vals.class_id || null, p_name: vals.name, p_creator_name: vals.creator_name }), "Ordner angelegt.");
       break;
     }
     case "rename-folder": {
