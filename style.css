@@ -176,6 +176,13 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
   border-radius: 50%;
   background: var(--bg);
   color: var(--muted);
+}
+/* :not([hidden]) statt display direkt auf .push-bell — sonst gewinnt diese
+   Regel gegen die display:none-Regel des hidden-Attributs (beide Herkunft
+   "Autor"-Stylesheet bei .push-bell selbst wäre gleichauf mit [hidden] aus
+   dem UA-Stylesheet, aber Autor-CSS schlägt UA-CSS immer, unabhängig von
+   der Spezifität) — der Button bliebe sonst immer sichtbar. */
+.push-bell:not([hidden]) {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1182,6 +1189,12 @@ main.has-dash-bubbles {
   border: 1px solid var(--line);
   background: var(--card);
   color: var(--ink);
+}
+/* :not([hidden]) statt display direkt auf .scroll-top-btn — sonst gewinnt
+   diese Autor-Regel gegen das display:none des hidden-Attributs (Autor-CSS
+   schlägt UA-CSS immer, unabhängig von der Spezifität) und der Button
+   bliebe immer sichtbar, auch ganz oben ohne zu scrollen. */
+.scroll-top-btn:not([hidden]) {
   display: flex;
   align-items: center;
   justify-content: center;
