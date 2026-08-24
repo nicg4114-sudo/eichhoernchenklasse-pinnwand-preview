@@ -91,6 +91,10 @@ const VERSIONS = [
       "Neu: Startseite als Dashboard — Hinweise zum Durchwischen, der nächste Termin und offene Aufgaben auf einen Blick, darunter drei Blasen zu Termin, Beteiligung und Datei.",
       "Neu: Aufgaben — bei Hinweisen, Umfragen, Listen und Tabellen lässt sich „Als Aufgabe markieren\" ankreuzen; jede*r kann sie für sich selbst auf „erledigt\" setzen.",
       "Neu: die Termin-Rubrik zeigt jetzt schlanke Streifen mit Zeitstrahl (Diese Woche/In 2 Wochen/…) — antippen klappt die Details auf.",
+      "Die drei Bubbles schweben jetzt fest über der Fußleiste, statt mit dem Feed mitzuscrollen.",
+      "Der aktuelle Hinweis auf der Startseite ist jetzt als angepinnter Zettel gestaltet, klar abgesetzt vom Rest.",
+      "Die Aufgaben-Übersicht auf der Startseite bleibt jetzt dauerhaft sichtbar, auch ohne offene Aufgabe.",
+      "Neu: das Archiv zeigt alle Einträge erst eingeklappt als Streifen — antippen klappt die Details auf, bessere Übersicht bei vielen Einträgen.",
     ],
   },
   {
@@ -116,6 +120,9 @@ let openFolderId;
 // Welcher Termin-Streifen gerade aufgeklappt ist (siehe renderTermineView)
 // — null/undefined = keiner.
 let openTerminId;
+// Dasselbe fürs Archiv (siehe renderArchivView) — eigener Zustand, weil
+// beide Ansichten unabhängig voneinander offen/zu sein können.
+let openArchivId;
 
 // Welche Klasse gerade "meine" ist — rein clientseitiger Anzeigefilter,
 // kein echter Zugriffsschutz (der kommt später mit Einmal-Codes, siehe
@@ -1034,11 +1041,17 @@ function renderNaechsterTermin(termine) {
 }
 
 // Karten mit is_aufgabe, die auf diesem Gerät noch nicht erledigt sind
-// (siehe AUFGABEN_ERLEDIGT_KEY) — verschwindet komplett, wenn nichts offen
-// ist, statt einen leeren Platzhalter zu zeigen.
+// (siehe AUFGABEN_ERLEDIGT_KEY). Bleibt bewusst dauerhaft auf dem
+// Dashboard sichtbar, auch ohne offene Aufgabe — mit ruhigem Leerzustand
+// statt ganz zu verschwinden, damit die Rubrik als fester Anlaufpunkt
+// erkennbar bleibt.
 function renderOffeneAufgaben(list) {
   const open = list.filter((c) => c.is_aufgabe && !isAufgabeErledigt(c.id));
-  if (!open.length) return "";
+  if (!open.length) {
+    return `
+      <div class="dash-section-label">Aufgaben</div>
+      <div class="aufgaben-list-empty">${ICONS.check} Keine offenen Aufgaben</div>`;
+  }
   const cardsHtml = open.map((c) => `
     <div class="aufgabe-card">
       <div class="aufgabe-card-title">${esc(c.title)}</div>
@@ -1103,23 +1116,50 @@ function renderTermineView(termine) {
   return head + groupsHtml;
 }
 
-function renderTerminStrip(c) {
-  const isOpen = c.id === openTerminId;
-  const d = parseISODate(c.event_date);
+// Wiederverwendbarer Akkordeon-Streifen: Kopfzeile mit Titel/Untertitel/
+// Datum, antippen klappt die volle Karte darunter auf. Genutzt von der
+// Termin-Rubrik (renderTerminStrip) und vom Archiv (renderArchivStrip).
+function renderAccordionStrip(c, { isOpen, action, dateLabel, sub }) {
   return `
-    <div class="termin-strip ${isOpen ? "open" : ""}">
-      <button class="termin-strip-head" data-action="toggle-termin-strip" data-card="${c.id}">
-        <span class="termin-strip-title-wrap">
-          <span class="termin-strip-title">${esc(c.title)}</span>
-          <span class="termin-strip-sub">${c.creator_name ? esc(c.creator_name) : ""}</span>
+    <div class="acc-strip ${esc(c.type)} ${isOpen ? "open" : ""}">
+      <button class="acc-strip-head" data-action="${action}" data-card="${c.id}">
+        <span class="acc-strip-title-wrap">
+          <span class="acc-strip-title">${esc(c.title)}</span>
+          <span class="acc-strip-sub">${esc(sub)}</span>
         </span>
-        <span class="termin-strip-date">
-          <span>${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.</span>
+        <span class="acc-strip-date">
+          <span>${esc(dateLabel)}</span>
           ${ICONS.chevron}
         </span>
       </button>
-      ${isOpen ? `<div class="termin-strip-body">${renderCard(c)}</div>` : ""}
+      ${isOpen ? `<div class="acc-strip-body">${renderCard(c)}</div>` : ""}
     </div>`;
+}
+
+function renderTerminStrip(c) {
+  const d = parseISODate(c.event_date);
+  return renderAccordionStrip(c, {
+    isOpen: c.id === openTerminId,
+    action: "toggle-termin-strip",
+    dateLabel: `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.`,
+    sub: c.creator_name || "",
+  });
+}
+
+/* ---------- Archiv: alle Typen, erst eingeklappt für bessere Übersicht ---------- */
+
+function renderArchivView(list) {
+  return list.map(renderArchivStrip).join("");
+}
+
+function renderArchivStrip(c) {
+  const d = new Date(c.created_at);
+  return renderAccordionStrip(c, {
+    isOpen: c.id === openArchivId,
+    action: "toggle-archiv-strip",
+    dateLabel: `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.`,
+    sub: TYPE_LABELS[c.type] + (c.creator_name ? " · " + c.creator_name : ""),
+  });
 }
 
 /* ---------- Beteiligung-Rubrik (Umfrage/Liste/Tabelle) ---------- */
@@ -1203,7 +1243,7 @@ function renderFolderView(dateiCards) {
 
 const EMPTY_TEXT = {
   feed: "Noch nichts an der Pinnwand. Mit dem +-Knopf unten geht's los.",
-  archiv: "Keine vergangenen Termine.",
+  archiv: "Noch nichts im Archiv.",
   papierkorb: "Der Papierkorb ist leer.",
 };
 
@@ -1280,7 +1320,7 @@ function render() {
       : "";
     elFeed.innerHTML = toolbar + list.map(renderCard).join("");
   } else {
-    elFeed.innerHTML = list.map(renderCard).join("");
+    elFeed.innerHTML = renderArchivView(list);
   }
 
   elEmpty.textContent = EMPTY_TEXT[view] || "";
@@ -2087,6 +2127,12 @@ async function handleFeedClick(ev) {
     case "toggle-termin-strip": {
       const id = btn.dataset.card;
       openTerminId = openTerminId === id ? null : id;
+      render();
+      break;
+    }
+    case "toggle-archiv-strip": {
+      const id = btn.dataset.card;
+      openArchivId = openArchivId === id ? null : id;
       render();
       break;
     }

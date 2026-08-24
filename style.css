@@ -316,7 +316,11 @@ main.has-dash-bubbles {
 .dash-section-label svg { width: 13px; height: 13px; }
 
 /* Hinweis-Karussell: eine Karte je Bildschirmbreite, per Scroll-Snap
-   wischbar, Punkte darunter zeigen Position/Anzahl. */
+   wischbar, Punkte darunter zeigen Position/Anzahl. Bewusst als
+   angepinnter Zettel gestaltet (Papierton, gestrichelter Rand, kleine
+   Pinnnadel oben, leichte Drehung) — deutlich abgesetzt von den weißen
+   Karten darunter (Termin/Aufgaben), damit auf einen Blick klar ist:
+   das hier ist der eine dauerhafte Aushang, der Rest ist der normale Feed. */
 .hinweis-carousel {
   display: flex;
   overflow-x: auto;
@@ -334,6 +338,30 @@ main.has-dash-bubbles {
 .hinweis-slide > .card, .hinweis-slide > .kurz-bubble {
   margin: 0;
   height: 100%;
+  position: relative;
+  background: #f3e4c8;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 10px -4px rgba(38, 28, 12, .18);
+  transform: rotate(-.6deg);
+}
+/* Höhere Selektor-Genauigkeit nötig, um die Typ-Farbakzent-Regel weiter
+   unten (.card:has(.type-badge.hinweis), Zeile ~617) zu überstimmen —
+   sonst bleibt der linke Rand in der dortigen Akzentfarbe hängen. */
+#feed .hinweis-slide > .card:has(.type-badge.hinweis),
+.hinweis-slide > .kurz-bubble {
+  border: 1.5px dashed var(--accent);
+}
+.hinweis-slide > .card::before, .hinweis-slide > .kurz-bubble::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent-dk);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
 }
 .hinweis-dots {
   display: flex;
@@ -391,6 +419,21 @@ main.has-dash-bubbles {
 }
 .aufgabe-card-title { font-weight: 800; font-size: .92rem; color: var(--ink); }
 .aufgabe-card-sub { font-size: .78rem; color: var(--muted); margin: 2px 0 8px; }
+
+/* Leerzustand, wenn gerade keine Aufgabe offen ist — Rubrik bleibt trotzdem
+   sichtbar (siehe renderOffeneAufgaben), nur ruhig statt in Warnfarbe. */
+.aufgaben-list-empty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  background: var(--line-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: .84rem;
+  color: var(--muted);
+}
+.aufgaben-list-empty svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--ok); }
 
 /* Kleines "Aufgabe"-Kennzeichen auf einer normalen Karte, siehe renderCard. */
 .card-aufgabe {
@@ -482,14 +525,22 @@ main.has-dash-bubbles {
 }
 .termine-timeline-strips { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 
-.termin-strip {
+/* Wiederverwendbarer Akkordeon-Streifen — Termin-Rubrik (immer Typ
+   "termin") und Archiv (gemischte Typen, daher die Farbzuordnung je
+   Klasse unten). Siehe renderAccordionStrip. */
+.acc-strip {
   border: 1px solid var(--line);
   border-left: 4px solid var(--c-termin);
   background: var(--card);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
-.termin-strip-head {
+.acc-strip.hinweis { border-left-color: var(--c-hinweis); }
+.acc-strip.liste   { border-left-color: var(--c-liste); }
+.acc-strip.tabelle { border-left-color: var(--c-tabelle); }
+.acc-strip.umfrage { border-left-color: var(--c-umfrage); }
+.acc-strip.datei   { border-left-color: var(--c-datei); }
+.acc-strip-head {
   width: 100%;
   display: flex;
   align-items: center;
@@ -503,9 +554,10 @@ main.has-dash-bubbles {
   padding: 10px 12px;
   color: var(--ink);
 }
-.termin-strip-title { font-weight: 800; font-size: .88rem; }
-.termin-strip-sub { font-size: .76rem; color: var(--muted); margin-top: 1px; }
-.termin-strip-date {
+.acc-strip-title-wrap { display: flex; flex-direction: column; min-width: 0; }
+.acc-strip-title { font-weight: 800; font-size: .88rem; }
+.acc-strip-sub { font-size: .76rem; color: var(--muted); margin-top: 1px; }
+.acc-strip-date {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -513,10 +565,10 @@ main.has-dash-bubbles {
   font-size: .8rem;
   color: var(--muted);
 }
-.termin-strip-date svg { width: 13px; height: 13px; transition: transform .15s ease; }
-.termin-strip.open .termin-strip-date svg { transform: rotate(90deg); }
-.termin-strip-body { padding: 0 10px 10px; }
-.termin-strip-body > .card { margin: 0; border: none; padding: 0; box-shadow: none; }
+.acc-strip-date svg { width: 13px; height: 13px; transition: transform .15s ease; }
+.acc-strip.open .acc-strip-date svg { transform: rotate(90deg); }
+.acc-strip-body { padding: 0 10px 10px; }
+.acc-strip-body > .card { margin: 0; border: none; padding: 0; box-shadow: none; }
 
 /* ---------- Hinweis-Rubrik: Kurznachrichten-Feed ---------- */
 
