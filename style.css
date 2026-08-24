@@ -466,6 +466,7 @@ main.has-dash-bubbles {
   text-align: left;
   font: inherit;
 }
+.dash-tile-termin-label { font-size: .64rem; font-weight: 600; opacity: .8; }
 .dash-tile-termin-date { font-size: .68rem; font-weight: 700; text-transform: uppercase; opacity: .9; }
 .dash-tile-termin-title {
   font-weight: 800;

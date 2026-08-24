@@ -1072,6 +1072,7 @@ function renderTerminAufgabenRow(termine, list) {
     const d = parseISODate(next.event_date);
     terminTile = `
       <button class="dash-tile dash-tile-termin" data-action="open-rubrik" data-type="termin" data-card="${next.id}">
+        <span class="dash-tile-termin-label">Nächster anstehender Termin:</span>
         <span class="dash-tile-termin-date">${d.getDate()}. ${MONTH_SHORT[d.getMonth()]}</span>
         <span class="dash-tile-termin-title">${esc(next.title)}</span>
         ${next.event_time ? `<span class="dash-tile-termin-time">${esc(fmtTime(next.event_time))} Uhr</span>` : ""}
