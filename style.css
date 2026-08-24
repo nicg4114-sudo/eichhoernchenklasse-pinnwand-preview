@@ -307,6 +307,28 @@ main.has-dash-bubbles {
 
 /* ---------- Start-Dashboard ---------- */
 
+/* Begrüßungsblock ganz oben, siehe renderWillkommen. */
+.willkommen {
+  padding: 0 2px 16px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 16px;
+}
+.willkommen-title { font-size: 1.05rem; font-weight: 800; color: var(--ink); line-height: 1.35; }
+.willkommen-sub { font-size: .82rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.willkommen-elternabend {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--accent-bg);
+  color: var(--accent-dk);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  margin-top: 12px;
+  font-size: .8rem;
+  font-weight: 600;
+}
+.willkommen-elternabend svg { width: 15px; height: 15px; flex: 0 0 auto; }
+
 .dash-section-label {
   display: flex;
   align-items: center;

@@ -155,6 +155,9 @@ if (classLocked && localStorage.getItem(CLASS_SLUG_KEY) === "schmetterling") {
 // hintereinander an und müssten sonst jedes Mal neu tippen).
 const CREATOR_NAME_KEY = "pinnwand_ersteller_name";
 const CLASS_ICON = { eichhoernchen: "🐿️", schmetterling: "🦋" };
+// Kurzform für den Begrüßungstext auf dem Dashboard (siehe renderWillkommen)
+// — cls.name allein wäre "Eichhörnchenklasse-Pinnwand", das klingt doppelt.
+const CLASS_GREETING_NAME = { eichhoernchen: "Eichhörnchen-Pinnwand", schmetterling: "Schmetterlings-Pinnwand" };
 
 // Wer eine Aufgabe (siehe is_aufgabe) für sich selbst erledigt hat, merkt
 // das rein geräteseitig — wie die Doppelstimmen-Sperre bei Umfragen. Keine
@@ -1002,9 +1005,39 @@ function renderStart(list) {
   const termine = list.filter((c) => c.type === "termin");
 
   return statsLineHtml(list)
+    + renderWillkommen(termine)
     + renderHinweisCarousel(hinweise)
     + renderNaechsterTermin(termine)
     + renderOffeneAufgaben(list);
+}
+
+// Begrüßungsblock ganz oben: Klassenname automatisch aus activeClassId
+// (gleiches Muster wie updateBrandTitle), bei "Beide Klassen" neutral wie
+// der Seitentitel. Die Elternabend-Zeile erkennt die App selbst — kein
+// eigenes Feld dafür, einfach der zeitlich nächste (noch nicht abgelaufene,
+// termine enthält dank visibleCards() ohnehin nur solche) Termin, dessen
+// Titel "Elternabend" enthält. Bewusst unabhängig von renderNaechsterTermin
+// darunter, das ja jeden beliebigen Termintyp zeigen kann.
+function renderWillkommen(termine) {
+  const cls = classesList.find((c) => c.id === activeClassId);
+  const ortsname = cls ? (CLASS_GREETING_NAME[cls.slug] || `${cls.name}-Pinnwand`) : "Klassen-Pinnwand";
+
+  const elternabend = termine
+    .filter((c) => c.title.toLowerCase().includes("elternabend"))
+    .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))[0];
+  const d = elternabend ? parseISODate(elternabend.event_date) : null;
+  const elternabendHtml = d ? `
+    <div class="willkommen-elternabend">
+      ${ICONS.termin}
+      Unser nächster Elternabend findet am ${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} statt.
+    </div>` : "";
+
+  return `
+    <div class="willkommen">
+      <div class="willkommen-title">Herzlich willkommen auf der ${esc(ortsname)}</div>
+      <div class="willkommen-sub">Hier findest du alles Organisatorische rund um die Klasse.</div>
+      ${elternabendHtml}
+    </div>`;
 }
 
 // Wischbares Karussell: eine Hinweis-Karte je Bildschirmbreite, Punkte
