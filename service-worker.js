@@ -7,7 +7,7 @@
 // Anfragen an Supabase (die eigentlichen Pinnwand-Daten) laufen immer direkt
 // übers Netz, damit nie veraltete Inhalte angezeigt werden.
 
-const CACHE_NAME = "pinnwand-shell-v27";
+const CACHE_NAME = "pinnwand-shell-v28";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -24,7 +24,15 @@ const SHELL_FILES = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES))
+    caches.open(CACHE_NAME).then((cache) =>
+      // "cache: reload" statt addAll(), damit hier wirklich frisch vom
+      // Server geholt wird — sonst kann der normale Browser-HTTP-Cache
+      // (unabhängig vom Service-Worker-Cache hier) eine veraltete Version
+      // liefern, und ein Update käme trotz neuer CACHE_NAME-Version nie an.
+      Promise.all(SHELL_FILES.map((url) =>
+        fetch(url, { cache: "reload" }).then((res) => cache.put(url, res))
+      ))
+    )
   );
   self.skipWaiting();
 });
