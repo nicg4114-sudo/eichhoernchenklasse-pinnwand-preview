@@ -578,6 +578,7 @@ main {
 .dash-tile-row.count-1 { grid-template-columns: 1fr; }
 .dash-tile-row.count-2 { grid-template-columns: 1fr 1fr; }
 .dash-tile-row.count-3 { grid-template-columns: 1fr 1fr 1fr; }
+.dash-tile-row.count-4 { grid-template-columns: 1fr 1fr; }
 .dash-tile {
   border-radius: var(--radius-sm);
   padding: 11px 10px;
@@ -644,6 +645,21 @@ main {
   opacity: .85;
 }
 .dash-tile-umfrage-count { font-size: .84rem; font-weight: 700; }
+
+.dash-tile-kalender {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: var(--c-datei);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.dash-tile-kalender svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.dash-tile-kalender-label { font-size: .84rem; font-weight: 700; }
 
 /* Kleines "Aufgabe"-Kennzeichen auf einer normalen Karte, siehe renderCard. */
 .card-aufgabe {

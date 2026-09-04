@@ -1195,7 +1195,13 @@ function renderTerminAufgabenRow(termine, list) {
       </button>`;
   }
 
-  const tiles = [terminTile, aufgabenTile, umfrageTile].filter(Boolean);
+  const kalenderTile = `
+    <button class="dash-tile dash-tile-kalender" data-action="open-rubrik" data-type="kalender">
+      ${ICONS.kalender}
+      <span class="dash-tile-kalender-label">Kalender</span>
+    </button>`;
+
+  const tiles = [terminTile, aufgabenTile, umfrageTile, kalenderTile].filter(Boolean);
   return `<div class="dash-tile-row count-${tiles.length}">${tiles.join("")}</div>`;
 }
 
@@ -2832,6 +2838,10 @@ async function handleFeedClick(ev) {
         openTerminId = btn.dataset.card || null;
       } else if (type === "beteiligung") {
         view = "beteiligung";
+      } else if (type === "kalender") {
+        view = "kalender";
+        calendarSelectedDate = null;
+        calendarMonth = null;
       }
       render();
       break;
