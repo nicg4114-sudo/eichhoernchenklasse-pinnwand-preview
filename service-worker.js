@@ -7,7 +7,7 @@
 // Anfragen an Supabase (die eigentlichen Pinnwand-Daten) laufen immer direkt
 // übers Netz, damit nie veraltete Inhalte angezeigt werden.
 
-const CACHE_NAME = "pinnwand-shell-v20";
+const CACHE_NAME = "pinnwand-shell-v21";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -64,13 +64,18 @@ self.addEventListener("push", (event) => {
     // Falls der Payload mal kein JSON ist, bleibt der Standardtext stehen.
   }
 
+  // data.id kommt von der send-push-Funktion (siehe notificationPayload
+  // dort) — führt beim Antippen direkt zur betroffenen Karte statt nur zur
+  // Startseite (app.js: openCardById via "#karte-<id>").
+  const url = data.id ? `./index.html#karte-${data.id}` : "./index.html";
+
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: "icon-192.png",
       badge: "icon-192.png",
       tag: data.type || "pinnwand",
-      data: { url: "./index.html" },
+      data: { url },
     })
   );
 });

@@ -1147,6 +1147,13 @@ main.has-dash-bubbles {
 }
 .btn.ghost { background: none; border-color: transparent; color: var(--muted); }
 .btn.ghost:hover { background: var(--bg); }
+.card-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.card-share-btn svg { width: 14px; height: 14px; }
 .btn.link {
   border: none;
   background: none;

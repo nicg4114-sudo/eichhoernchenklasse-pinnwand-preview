@@ -135,6 +135,18 @@ let openTerminId;
 // beide Ansichten unabhängig voneinander offen/zu sein können.
 let openArchivId;
 
+// Karten-Id aus einem "#karte-<id>"-Link (Push-Klick, Teilen-Link), die
+// erst aufgelöst werden kann, sobald die Karten geladen sind — siehe
+// applyInitialHash()/openCardById() und den Aufruf in reload().
+let pendingCardId = null;
+// Verhindert, dass render() während eines popstate (Zurück/Vorwärts) einen
+// neuen Verlaufseintrag erzeugt — siehe syncHistory()/popstate-Listener.
+let suppressHistoryPush = false;
+// Erster Aufruf von syncHistory() ersetzt den Verlaufseintrag statt einen
+// neuen anzulegen (kanonisiert z. B. einen "#karte-…"-Link zur passenden
+// Ansicht, ohne die Zurück-Taste mit einem Zwischenschritt zu belasten).
+let firstHistorySyncDone = false;
+
 // Welche Klasse gerade "meine" ist — rein clientseitiger Anzeigefilter,
 // kein echter Zugriffsschutz (der kommt später mit Einmal-Codes, siehe
 // plan-mehrklassen-dashboard.md). "" = beide Klassen anzeigen.
@@ -595,7 +607,15 @@ async function reload({ silent = false } = {}) {
     foldersList = foldersData;
     loaded = true;
     elNotice.hidden = true;
-    render();
+    // Nur beim allerersten erfolgreichen Laden relevant — danach ist
+    // pendingCardId schon geleert. openCardById() ruft render() selbst auf.
+    if (pendingCardId) {
+      const id = pendingCardId;
+      pendingCardId = null;
+      openCardById(id);
+    } else {
+      render();
+    }
   } catch (err) {
     if (!silent) {
       elNotice.innerHTML =
@@ -911,7 +931,21 @@ function renderCard(c, opts) {
       <div class="card-meta">Erstellt am ${fmtTimestamp(c.created_at)}${creatorNote}${endNote}</div>
       ${editedNote}
       ${aufgabeBlockHtml(c)}
+      ${shareButtonHtml(c)}
     </article>`;
+}
+
+// Teilen-Button für Umfrage/Liste — bewusst NICHT an classLocked gekoppelt
+// (anders als das "..."-Aktionsmenü), jede*r soll eine Umfrage/Liste
+// verschicken können, z. B. in die Signal-Elterngruppe. Öffnet der/die
+// Empfänger*in den Link, springt die App direkt zu genau dieser Karte
+// (siehe openCardById in render()).
+function shareButtonHtml(c) {
+  if (!["umfrage", "liste"].includes(c.type) || c.trashed_at) return "";
+  return `
+    <button type="button" class="btn small ghost card-share-btn" data-action="share-card" data-card="${c.id}">
+      ${ICONS.link}Teilen
+    </button>`;
 }
 
 // Kleiner Verweis-Chip auf einer verknüpften Karte, zurück zum Termin, an
@@ -1327,6 +1361,104 @@ function wireHinweisCarousel() {
   }, { passive: true });
 }
 
+/* ---------- Adressleiste / Verlauf ---------- */
+// Jede Ansicht (inkl. aufgeklappter Termin-/Archiv-Streifen und Ordner)
+// bekommt einen eigenen URL-Anker, damit die Zurück-Taste des Geräts
+// zwischen Ansichten statt aus der App springt, und damit sich einzelne
+// Karten direkt verlinken lassen (Push-Klick, Teilen-Button).
+
+// Baut aus dem aktuellen Navigations-Zustand den passenden URL-Anker.
+function hashFromState() {
+  if (view === "termine") return openTerminId ? `#termine-${openTerminId}` : "#termine";
+  if (view === "beteiligung") return "#beteiligung";
+  if (view === "dateien") return openFolderId === undefined ? "#dateien" : `#dateien-${openFolderId}`;
+  if (view === "archiv") return openArchivId ? `#archiv-${openArchivId}` : "#archiv";
+  if (view === "papierkorb") return "#papierkorb";
+  return "";
+}
+
+// Kehrt hashFromState() um: setzt view/openXId anhand eines Ankers aus der
+// Adressleiste. "#karte-…"-Links werden hier bewusst NICHT behandelt (die
+// brauchen erst geladene Karten, siehe applyInitialHash/openCardById).
+function applyHash(hash) {
+  const h = (hash || "").replace(/^#/, "");
+  if (h.startsWith("termine-")) { view = "termine"; openTerminId = h.slice(8); }
+  else if (h === "termine") { view = "termine"; openTerminId = null; }
+  else if (h === "beteiligung") { view = "beteiligung"; }
+  else if (h.startsWith("dateien-")) { view = "dateien"; openFolderId = h.slice(8); }
+  else if (h === "dateien") { view = "dateien"; openFolderId = undefined; }
+  else if (h.startsWith("archiv-")) { view = "archiv"; openArchivId = h.slice(7); }
+  else if (h === "archiv") { view = "archiv"; openArchivId = null; }
+  else if (h === "papierkorb") { view = "papierkorb"; }
+  else if (!h.startsWith("karte-")) { view = "feed"; }
+}
+
+// Einmalig beim App-Start: "#karte-<id>" wird gemerkt (siehe pendingCardId),
+// alles andere kann sofort angewendet werden — render() zeigt vor dem Laden
+// ohnehin noch nichts an.
+function applyInitialHash() {
+  const h = (location.hash || "").replace(/^#/, "");
+  if (h.startsWith("karte-")) { pendingCardId = h.slice(6); return; }
+  applyHash(location.hash);
+}
+
+// Am Ende von render() aufgerufen: gleicht die Adressleiste mit dem
+// aktuellen Zustand ab. Unverändert (z. B. bei der stillen 60-Sekunden-
+// Aktualisierung) → nichts tun. Erster Aufruf überhaupt → ersetzen statt
+// einen neuen Verlaufseintrag anzulegen. Ein echter Navigationsschritt →
+// neuer Verlaufseintrag, damit die Zurück-Taste greift.
+function syncHistory() {
+  if (suppressHistoryPush) return;
+  const hash = hashFromState();
+  const changed = hash !== (location.hash || "");
+  if (!changed && firstHistorySyncDone) return;
+  const url = location.pathname + location.search + hash;
+  if (!firstHistorySyncDone) {
+    history.replaceState({ hash }, "", url);
+    firstHistorySyncDone = true;
+  } else {
+    history.pushState({ hash }, "", url);
+  }
+}
+
+// Springt direkt zu einer Karte: bestimmt die passende Ansicht (inkl.
+// Papierkorb/Archiv, falls die Karte dort liegt), wechselt dahin und hebt
+// die Karte kurz hervor. Quelle für Push-Klick (service-worker.js) und den
+// Teilen-Button (siehe shareButtonHtml) — beide verlinken auf "#karte-<id>".
+function openCardById(id) {
+  const c = cardById(id);
+  if (!c) return;
+  if (c.trashed_at) {
+    view = "papierkorb";
+  } else if (isArchived(c)) {
+    view = "archiv";
+    openArchivId = id;
+  } else if (c.type === "termin") {
+    view = "termine";
+    openTerminId = id;
+  } else if (["umfrage", "liste", "tabelle"].includes(c.type)) {
+    view = "beteiligung";
+  } else if (c.type === "datei") {
+    view = "dateien";
+    openFolderId = c.folder_id || "";
+  } else {
+    view = "feed";
+  }
+  render();
+  requestAnimationFrame(() => {
+    if (c.type === "hinweis" && view === "feed") {
+      const hinweise = visibleCards().filter((x) => x.type === "hinweis");
+      const idx = hinweise.findIndex((x) => x.id === id);
+      if (idx >= 0) { hinweisCarouselIndex = idx; wireHinweisCarousel(); }
+    }
+    const el = elFeed.querySelector(`.card[data-card="${CSS.escape(id)}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 1600);
+  });
+}
+
 function render() {
   document.querySelectorAll("#viewTabs button").forEach((b) =>
     b.classList.toggle("active", b.dataset.view === view));
@@ -1367,6 +1499,7 @@ function render() {
 
   elEmpty.textContent = EMPTY_TEXT[view] || "";
   elEmpty.hidden = EIGENE_LEER_ANZEIGE.has(view) ? true : list.length > 0;
+  syncHistory();
 }
 
 /* ---------- Dialoge: Bestätigen und Nachfragen ---------- */
@@ -2078,6 +2211,26 @@ async function handleFeedClick(ev) {
         "Aus dem Archiv zurückgeholt.");
       break;
     }
+    case "share-card": {
+      const c = cardById(cardId);
+      if (!c) break;
+      // Klassen-Kontext des teilenden Geräts mitgeben, falls vorhanden —
+      // so landet, wer den Link öffnet, gleich in der passenden Klasse.
+      const slug = localStorage.getItem(CLASS_SLUG_KEY);
+      const url = `${location.origin}${location.pathname}${slug ? `?klasse=${slug}` : ""}#karte-${c.id}`;
+      if (navigator.share) {
+        try { await navigator.share({ title: c.title, url }); }
+        catch { /* abgebrochen — kein Fehler */ }
+      } else {
+        try {
+          await navigator.clipboard.writeText(url);
+          toast("Link kopiert.");
+        } catch {
+          toast("Link konnte nicht kopiert werden.", true);
+        }
+      }
+      break;
+    }
     case "move-file": {
       const c = cardById(cardId);
       if (!c) break;
@@ -2462,6 +2615,19 @@ async function togglePush() {
 /* ---------- Initialisierung ---------- */
 
 async function init() {
+  // Anker aus der Adressleiste übernehmen, bevor überhaupt etwas gerendert
+  // wird ("#karte-…" wird erst gemerkt, siehe pendingCardId in reload()).
+  applyInitialHash();
+
+  // Zurück/Vorwärts im Browser bzw. die Zurück-Geste/-Taste des Geräts —
+  // siehe hashFromState()/syncHistory() oben.
+  window.addEventListener("popstate", () => {
+    suppressHistoryPush = true;
+    applyHash(location.hash);
+    render();
+    suppressHistoryPush = false;
+  });
+
   // Ansichten und Filter (feste Fußleiste, siehe .bottom-nav)
   elViewTabs.addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-view]");
