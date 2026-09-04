@@ -239,6 +239,7 @@ const dlgMore = $("dlgMore");
 const elMoreBtn = $("moreBtn");
 const dlgKalenderAdmin = $("dlgKalenderAdmin");
 const elKalAdminBody = $("kalAdminBody");
+const dlgKalenderMenu = $("dlgKalenderMenu");
 
 /* ---------- Hilfsfunktionen ---------- */
 
@@ -459,7 +460,7 @@ function toast(msg, isError = false) {
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin].some((d) => d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgKalenderMenu].some((d) => d.open);
 }
 
 /* ---------- API ---------- */
@@ -1071,7 +1072,12 @@ function renderKurznachricht(c) {
 
 // list: alle sichtbaren, nicht archivierten Karten der aktiven Klasse.
 function renderStart(list) {
-  const hinweise = list.filter((c) => c.type === "hinweis");
+  // Bewusst nicht die Fetch-Reihenfolge (pinned zuerst) übernehmen — im
+  // Karussell soll immer der zeitlich neuste Hinweis vorne stehen, auch
+  // wenn ein älterer Hinweis angepinnt ist (die Anpinn-Kennzeichnung
+  // bleibt sichtbar, bestimmt aber nicht mehr die Reihenfolge).
+  const hinweise = list.filter((c) => c.type === "hinweis")
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const termine = list.filter((c) => c.type === "termin");
 
   return statsLineHtml(list)
@@ -1196,9 +1202,9 @@ function renderTerminAufgabenRow(termine, list) {
   }
 
   const kalenderTile = `
-    <button class="dash-tile dash-tile-kalender" data-action="open-rubrik" data-type="kalender">
+    <button class="dash-tile dash-tile-kalender" data-action="open-kalender-menu">
       ${ICONS.kalender}
-      <span class="dash-tile-kalender-label">Kalender</span>
+      <span class="dash-tile-kalender-label">Kalender/Stundenplan</span>
     </button>`;
 
   const tiles = [terminTile, aufgabenTile, umfrageTile, kalenderTile].filter(Boolean);
@@ -1438,14 +1444,15 @@ function termineForDate(dateStr) {
     c.type === "termin" && !c.trashed_at && c.event_date === dateStr && inActiveClass(c));
 }
 
-// Tage im aktuell angezeigten Monat, für die es überhaupt etwas zu zeigen
-// gibt (Termin, wiederkehrender Termin oder Ferien) — für den Punkt im
-// Monatsraster.
-function dayHasContent(dateStr, weekday) {
-  if (holidayForDate(dateStr)) return true;
-  if (termineForDate(dateStr).length) return true;
-  if (recurringForDate(dateStr, weekday).length) return true;
-  return false;
+// Welche Punkt-Arten ein Tag im Monatsraster bekommt — getrennt nach
+// Termin und wiederkehrendem Ereignis, damit auf einen Blick erkennbar
+// ist, WAS an dem Tag los ist, nicht nur DASS etwas los ist.
+function dayEventFlags(dateStr, weekday) {
+  return {
+    termin: termineForDate(dateStr).length > 0,
+    // recurringForDate() liefert an Ferientagen bereits [] zurück.
+    recurring: recurringForDate(dateStr, weekday).length > 0,
+  };
 }
 
 function renderKalenderMonth() {
@@ -1471,10 +1478,15 @@ function renderKalenderMonth() {
       dateStr === calendarSelectedDate ? "is-selected" : "",
       holiday ? "is-holiday" : "",
     ].filter(Boolean).join(" ");
+    const flags = holiday ? { termin: false, recurring: false } : dayEventFlags(dateStr, weekday);
     cells += `
       <button type="button" class="${cls}" data-action="cal-day" data-date="${dateStr}" title="${holiday ? esc(holiday.label) : ""}">
         <span class="cal-day-num">${d.getDate()}</span>
-        ${dayHasContent(dateStr, weekday) && !holiday ? `<span class="cal-day-dot"></span>` : ""}
+        ${flags.termin || flags.recurring ? `
+          <span class="cal-day-dots">
+            ${flags.termin ? `<span class="cal-day-dot cal-day-dot-termin"></span>` : ""}
+            ${flags.recurring ? `<span class="cal-day-dot cal-day-dot-recurring"></span>` : ""}
+          </span>` : ""}
       </button>`;
     // Nach dem letzten Tag des Monats nicht unnötig eine ganze weitere,
     // komplett leere Woche anhängen.
@@ -1496,35 +1508,19 @@ function renderKalenderDay() {
   const dateStr = calendarSelectedDate;
   const weekday = isoWeekday(parseISODate(dateStr));
   const holiday = holidayForDate(dateStr);
-  const schedule = scheduleForDate(dateStr, weekday);
   const recurring = recurringForDate(dateStr, weekday);
   const termine = termineForDate(dateStr);
 
   let body = "";
   if (holiday) {
     body += `<p class="cal-day-holiday">${ICONS.warning}<span>${esc(holiday.label)} — kein Unterricht</span></p>`;
-  } else {
-    if (schedule.length) {
-      body += `<div class="cal-schedule">${schedule.map((s) => {
-        const linked = cards.filter((c) =>
-          c.type === "hinweis" && !c.trashed_at && c.schedule_slot_id === s.id && inActiveClass(c));
-        return `
-          <div class="cal-schedule-row">
-            <span class="cal-schedule-time">${fmtTime(s.start_time)}</span>
-            <span class="cal-schedule-subject">${esc(s.subject)}${s.room ? ` <span class="cal-schedule-room">· ${esc(s.room)}</span>` : ""}</span>
-          </div>
-          ${linked.map((c) => `<div class="cal-schedule-hinweis" data-action="open-card" data-card="${c.id}">${ICONS.hinweis}<span>${esc(c.title)}</span></div>`).join("")}`;
-      }).join("")}</div>`;
-    } else if (!activeClassId) {
-      body += `<p class="rubrik-panel-empty">Bitte eine Klasse wählen, um den Stundenplan zu sehen.</p>`;
-    }
-    if (recurring.length) {
-      body += recurring.map((r) => `
-        <div class="event-row">
-          <div class="event-date-box"><b>${r.start_time ? fmtTime(r.start_time) : "—"}</b><span>jede Woche</span></div>
-          <div class="event-info"><b>${esc(r.title)}</b>${r.body ? `<span>${esc(r.body)}</span>` : ""}</div>
-        </div>`).join("");
-    }
+  }
+  if (recurring.length) {
+    body += recurring.map((r) => `
+      <div class="event-row">
+        <div class="event-date-box"><b>${r.start_time ? fmtTime(r.start_time) : "—"}</b><span>jede Woche</span></div>
+        <div class="event-info"><b>${esc(r.title)}</b>${r.body ? `<span>${esc(r.body)}</span>` : ""}</div>
+      </div>`).join("");
   }
 
   if (termine.length) body += termine.map((c) => renderCard(c)).join("");
@@ -1564,6 +1560,53 @@ function wireKalender() {
   });
 }
 
+/* ---------- Stundenplan-Ansicht (eigenständig, siehe #11) ---------- */
+// Reine Lese-Ansicht für alle, 5 Spalten (Mo–Fr) — die Bearbeitung läuft
+// weiterhin über die Verwaltung (renderKalAdminSchedule), hier nur ein
+// Sprungbrett dahin für den Hauptlink.
+
+function renderStundenplanView() {
+  const head = `
+    <div class="dateien-head">
+      <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
+      <span class="spacer"></span>
+      ${classLocked ? "" : `<button class="btn small ghost" data-action="edit-stundenplan">Bearbeiten</button>`}
+    </div>`;
+
+  if (!activeClassId) {
+    return head + `<p class="rubrik-panel-empty">Bitte oben eine Klasse wählen, um den Stundenplan zu sehen.</p>`;
+  }
+
+  const byPeriod = new Map();
+  for (const s of scheduleSlots.filter((s) => s.class_id === activeClassId)) {
+    if (!byPeriod.has(s.period)) byPeriod.set(s.period, {});
+    byPeriod.get(s.period)[s.weekday] = s;
+  }
+  const periods = [...byPeriod.keys()].sort((a, b) => a - b);
+
+  if (!periods.length) {
+    return head + `<p class="rubrik-panel-empty">Für diese Klasse ist noch kein Stundenplan hinterlegt.</p>`;
+  }
+
+  const rows = periods.map((p) => {
+    const cells = byPeriod.get(p);
+    const first = Object.values(cells)[0];
+    return `
+      <tr>
+        <td class="stundenplan-time">${esc(fmtTime(first?.start_time))}<br>${esc(fmtTime(first?.end_time))}</td>
+        ${[1, 2, 3, 4, 5].map((wd) => `<td>${cells[wd] ? esc(cells[wd].subject) + (cells[wd].room ? `<br><span class="stundenplan-room">${esc(cells[wd].room)}</span>` : "") : "—"}</td>`).join("")}
+      </tr>`;
+  }).join("");
+
+  return head + `
+    <div class="table-scroll">
+      <table class="sched-table stundenplan-table">
+        <thead><tr><th></th>${WEEKDAY_SHORT.slice(1, 6).map((w) => `<th>${w}</th>`).join("")}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
 /* ---------- Verwaltung: Stundenplan/Ereignisse/Ferien (nur Hauptlink) --- */
 // Eigener, kleiner "Screen"-Mechanismus innerhalb von dlgKalenderAdmin:
 // renderKalAdminHome/-Schedule/-Recurring/-Holidays füllen jeweils
@@ -1578,8 +1621,9 @@ function klassenOptionsMitGemeinsam(selected) {
   return opts.map((o) => `<option value="${esc(o.value)}" ${o.value === (selected || "") ? "selected" : ""}>${esc(o.label)}</option>`).join("");
 }
 
-function openKalenderAdmin() {
-  renderKalAdminHome();
+function openKalenderAdmin(startScreen) {
+  if (startScreen === "schedule") renderKalAdminSchedule();
+  else renderKalAdminHome();
   dlgKalenderAdmin.showModal();
 }
 
@@ -1816,7 +1860,7 @@ const EMPTY_TEXT = {
 
 // Views mit eigener Leer-Anzeige (Karussell/Kacheln zeigen ihren
 // Leer-Zustand selbst) — der generische Hinweistext ist dort überflüssig.
-const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender", "aufgaben"]);
+const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender", "aufgaben", "stundenplan"]);
 
 // Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint — bewusst
 // höher als eine Bildschirmhöhe, damit er nicht schon nach kurzem Scrollen
@@ -1905,6 +1949,7 @@ function hashFromState() {
   if (view === "papierkorb") return "#papierkorb";
   if (view === "kalender") return calendarSelectedDate ? `#kalender-${calendarSelectedDate}` : "#kalender";
   if (view === "aufgaben") return "#aufgaben";
+  if (view === "stundenplan") return "#stundenplan";
   return "";
 }
 
@@ -1929,6 +1974,7 @@ function applyHash(hash) {
   } else if (h === "kalender") {
     view = "kalender"; calendarSelectedDate = null; calendarMonth = null;
   } else if (h === "aufgaben") { view = "aufgaben"; }
+  else if (h === "stundenplan") { view = "stundenplan"; }
   else if (!h.startsWith("karte-")) { view = "feed"; }
 }
 
@@ -2034,6 +2080,8 @@ function render() {
     wireKalender();
   } else if (view === "aufgaben") {
     elFeed.innerHTML = renderAufgabenView(list.filter((c) => c.is_aufgabe));
+  } else if (view === "stundenplan") {
+    elFeed.innerHTML = renderStundenplanView();
   } else {
     elFeed.innerHTML = renderArchivView(list);
   }
@@ -2723,7 +2771,7 @@ async function doAction(fn, successMsg) {
 const ADMIN_NUR_HAUPTLINK = new Set([
   "edit", "pin", "trash", "restore", "delete-forever", "add-linked", "empty-trash",
   "create-folder", "rename-folder", "delete-folder", "move-file",
-  "archive-card", "unarchive-card", "open-kalender-admin",
+  "archive-card", "unarchive-card", "open-kalender-admin", "edit-stundenplan",
 ]);
 
 async function handleFeedClick(ev) {
@@ -2899,6 +2947,14 @@ async function handleFeedClick(ev) {
     }
     case "open-kalender-admin": {
       openKalenderAdmin();
+      break;
+    }
+    case "edit-stundenplan": {
+      openKalenderAdmin("schedule");
+      break;
+    }
+    case "open-kalender-menu": {
+      dlgKalenderMenu.showModal();
       break;
     }
     case "toggle-willkommen": {
@@ -3307,6 +3363,17 @@ async function init() {
   if (dlgKalenderAdmin) {
     dlgKalenderAdmin.addEventListener("click", (ev) => {
       if (ev.target.closest("[data-close]")) dlgKalenderAdmin.close();
+    });
+  }
+
+  // Auswahlmenü der Startseiten-Kachel "Kalender/Stundenplan" — führt zu
+  // den zwei eigenständigen Ansichten (getrennt, damit der Kalender nicht
+  // mehr mit dem Stundenplan vermischt ist).
+  if (dlgKalenderMenu) {
+    dlgKalenderMenu.addEventListener("click", (ev) => {
+      const item = ev.target.closest(".more-item[data-view]");
+      if (item) { view = item.dataset.view; render(); }
+      if (ev.target.closest("[data-close]")) dlgKalenderMenu.close();
     });
   }
 

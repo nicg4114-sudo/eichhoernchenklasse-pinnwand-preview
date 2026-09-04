@@ -1092,16 +1092,17 @@ main {
 .cal-day.is-selected { background: var(--accent-bg); }
 .cal-day.is-holiday { color: var(--muted); text-decoration: line-through; }
 .cal-day-num { font-size: .85rem; }
-.cal-day-dot {
+.cal-day-dots {
   position: absolute;
   bottom: 4px;
   left: 50%;
   transform: translateX(-50%);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--c-termin);
+  display: flex;
+  gap: 3px;
 }
+.cal-day-dot { width: 5px; height: 5px; border-radius: 50%; }
+.cal-day-dot-termin { background: var(--c-termin); }
+.cal-day-dot-recurring { background: var(--c-beteiligung); }
 
 .cal-day-detail { margin-top: 4px; }
 .cal-day-holiday {
@@ -1160,6 +1161,22 @@ main {
   font-size: .85rem;
 }
 .sched-table input.sched-time { width: 58px; min-width: 58px; }
+
+/* Stundenplan-Ansicht (rein lesend, alle Nutzer, siehe renderStundenplanView) */
+.stundenplan-table td, .stundenplan-table th {
+  text-align: center;
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: .85rem;
+}
+.stundenplan-table th { border-bottom: 1px solid var(--line); }
+.stundenplan-time {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: .75rem !important;
+  white-space: nowrap;
+}
+.stundenplan-room { color: var(--muted); font-size: .78rem; }
 
 /* Listen */
 .items { list-style: none; margin: 0 0 8px; padding: 0; }
