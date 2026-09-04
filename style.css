@@ -759,6 +759,7 @@ main {
 }
 .back-btn { display: inline-flex; align-items: center; gap: 6px; }
 .back-btn svg { width: 15px; height: 15px; }
+.dateien-head .spacer { flex: 1; }
 
 .folder-grid {
   display: grid;
@@ -1117,6 +1118,27 @@ main {
   cursor: pointer;
 }
 .cal-schedule-hinweis svg { width: 15px; height: 15px; flex: 0 0 auto; }
+
+/* Verwaltung Kalender/Stundenplan (dlgKalenderAdmin, nur Hauptlink) */
+.table-scroll { overflow-x: auto; margin: 10px 0; }
+.sched-table { border-collapse: collapse; width: 100%; min-width: 560px; }
+.sched-table th {
+  text-align: left;
+  font-size: .72rem;
+  color: var(--muted);
+  padding: 4px 4px;
+}
+.sched-table td { padding: 3px 4px; }
+.sched-table input[type="text"] {
+  width: 100%;
+  min-width: 60px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  font-size: .85rem;
+}
+.sched-table input.sched-time { width: 58px; min-width: 58px; }
 
 /* Listen */
 .items { list-style: none; margin: 0 0 8px; padding: 0; }

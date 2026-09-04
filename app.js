@@ -237,6 +237,8 @@ const dlgVersion = $("dlgVersion");
 const elVersionBtn = $("moreVersionBtn");
 const dlgMore = $("dlgMore");
 const elMoreBtn = $("moreBtn");
+const dlgKalenderAdmin = $("dlgKalenderAdmin");
+const elKalAdminBody = $("kalAdminBody");
 
 /* ---------- Hilfsfunktionen ---------- */
 
@@ -457,7 +459,7 @@ function toast(msg, isError = false) {
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore].some((d) => d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin].some((d) => d.open);
 }
 
 /* ---------- API ---------- */
@@ -1509,6 +1511,8 @@ function renderKalenderView() {
   const head = `
     <div class="dateien-head">
       <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
+      <span class="spacer"></span>
+      ${classLocked ? "" : `<button class="btn small ghost" data-action="open-kalender-admin">Verwalten</button>`}
     </div>`;
   return head + `<div class="cal-wrap">${renderKalenderMonth()}</div>${renderKalenderDay()}`;
 }
@@ -1526,6 +1530,250 @@ function wireKalender() {
   elFeed.querySelector("[data-action='cal-next']")?.addEventListener("click", () => {
     calendarMonth.setMonth(calendarMonth.getMonth() + 1);
     render();
+  });
+}
+
+/* ---------- Verwaltung: Stundenplan/Ereignisse/Ferien (nur Hauptlink) --- */
+// Eigener, kleiner "Screen"-Mechanismus innerhalb von dlgKalenderAdmin:
+// renderKalAdminHome/-Schedule/-Recurring/-Holidays füllen jeweils
+// elKalAdminBody komplett neu und verdrahten sich selbst — kein
+// zusätzlicher globaler Klick-Handler nötig, wie bei promptDlg/confirmDlg.
+
+const WOCHENTAG_OPTIONS = [1, 2, 3, 4, 5, 6, 7].map((n) => ({ value: String(n), label: WEEKDAY_LABEL[n] }));
+
+function klassenOptionsMitGemeinsam(selected) {
+  const opts = [{ value: "", label: "Beide Klassen" }].concat(
+    classesList.map((cl) => ({ value: cl.id, label: `${CLASS_ICON[cl.slug] || ""} ${cl.name}` })));
+  return opts.map((o) => `<option value="${esc(o.value)}" ${o.value === (selected || "") ? "selected" : ""}>${esc(o.label)}</option>`).join("");
+}
+
+function openKalenderAdmin() {
+  renderKalAdminHome();
+  dlgKalenderAdmin.showModal();
+}
+
+function renderKalAdminHome() {
+  elKalAdminBody.innerHTML = `
+    <h2>Kalender verwalten</h2>
+    <div class="more-list">
+      <button type="button" class="more-item" data-admin="schedule">${ICONS.kalender}Stundenplan bearbeiten</button>
+      <button type="button" class="more-item" data-admin="recurring">${ICONS.kalender}Wiederkehrende Ereignisse</button>
+      <button type="button" class="more-item" data-admin="holidays">${ICONS.kalender}Ferien &amp; freie Tage</button>
+    </div>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" data-close>Schließen</button>
+    </div>`;
+  elKalAdminBody.querySelectorAll("[data-admin]").forEach((btn) => btn.addEventListener("click", () => {
+    if (btn.dataset.admin === "schedule") renderKalAdminSchedule();
+    else if (btn.dataset.admin === "recurring") renderKalAdminRecurring();
+    else renderKalAdminHolidays();
+  }));
+}
+
+// ---- Stundenplan ----
+
+function renderKalAdminSchedule(classId) {
+  classId = classId || activeClassId || classesList[0]?.id || "";
+  const periods = [1, 2, 3, 4, 5, 6];
+  const byPeriod = new Map();
+  for (const s of scheduleSlots.filter((s) => s.class_id === classId)) {
+    if (!byPeriod.has(s.period)) byPeriod.set(s.period, {});
+    byPeriod.get(s.period)[s.weekday] = s;
+  }
+  const usedPeriods = periods.filter((p) => byPeriod.has(p));
+  const rows = (usedPeriods.length ? usedPeriods : [1]).map((p) => {
+    const cells = byPeriod.get(p) || {};
+    const first = Object.values(cells)[0];
+    return `
+      <tr data-period="${p}">
+        <td><input type="text" class="sched-time" data-role="start" value="${esc(first?.start_time?.slice(0, 5) || "")}" placeholder="08:10" size="5"></td>
+        <td><input type="text" class="sched-time" data-role="end" value="${esc(first?.end_time?.slice(0, 5) || "")}" placeholder="09:45" size="5"></td>
+        ${[1, 2, 3, 4, 5].map((wd) => `<td><input type="text" class="sched-subject" data-weekday="${wd}" value="${esc(cells[wd]?.subject || "")}" placeholder="—"></td>`).join("")}
+        <td><button type="button" class="icon-btn" data-action="sched-remove-row" title="Zeile entfernen">✕</button></td>
+      </tr>`;
+  }).join("");
+
+  elKalAdminBody.innerHTML = `
+    <h2>Stundenplan</h2>
+    <label class="field">
+      <span>Klasse</span>
+      <select id="schedClassSelect">${classesList.map((cl) =>
+        `<option value="${esc(cl.id)}" ${cl.id === classId ? "selected" : ""}>${CLASS_ICON[cl.slug] || ""} ${esc(cl.name)}</option>`).join("")}</select>
+    </label>
+    <div class="table-scroll">
+      <table class="sched-table">
+        <thead><tr><th>von</th><th>bis</th>${WEEKDAY_SHORT.slice(1, 6).map((w) => `<th>${w}</th>`).join("")}<th></th></tr></thead>
+        <tbody id="schedRows">${rows}</tbody>
+      </table>
+    </div>
+    <button type="button" class="btn link" data-action="sched-add-row">+ Stunde hinzufügen</button>
+    <p class="field-hint">Leere Felder bei einem Fach lassen die Stunde an dem Tag einfach weg.</p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" data-action="admin-back">Zurück</button>
+      <button type="button" class="btn primary" data-action="sched-save">Speichern</button>
+    </div>`;
+
+  $("schedClassSelect").addEventListener("change", (ev) => renderKalAdminSchedule(ev.target.value));
+  elKalAdminBody.querySelector("[data-action='admin-back']").addEventListener("click", renderKalAdminHome);
+  elKalAdminBody.querySelector("[data-action='sched-add-row']").addEventListener("click", () => {
+    const nextPeriod = Math.max(0, ...[...elKalAdminBody.querySelectorAll("#schedRows tr")].map((tr) => Number(tr.dataset.period))) + 1;
+    $("schedRows").insertAdjacentHTML("beforeend", `
+      <tr data-period="${nextPeriod}">
+        <td><input type="text" class="sched-time" data-role="start" placeholder="08:10" size="5"></td>
+        <td><input type="text" class="sched-time" data-role="end" placeholder="09:45" size="5"></td>
+        ${[1, 2, 3, 4, 5].map((wd) => `<td><input type="text" class="sched-subject" data-weekday="${wd}" placeholder="—"></td>`).join("")}
+        <td><button type="button" class="icon-btn" data-action="sched-remove-row" title="Zeile entfernen">✕</button></td>
+      </tr>`);
+    wireScheduleRemoveButtons();
+  });
+  wireScheduleRemoveButtons();
+
+  function wireScheduleRemoveButtons() {
+    elKalAdminBody.querySelectorAll("[data-action='sched-remove-row']").forEach((btn) => {
+      btn.onclick = () => btn.closest("tr").remove();
+    });
+  }
+
+  elKalAdminBody.querySelector("[data-action='sched-save']").addEventListener("click", async () => {
+    const slots = [];
+    for (const tr of elKalAdminBody.querySelectorAll("#schedRows tr")) {
+      const period = Number(tr.dataset.period);
+      const start = tr.querySelector("[data-role='start']").value.trim();
+      const end = tr.querySelector("[data-role='end']").value.trim();
+      if (!start || !end) continue;
+      for (const inp of tr.querySelectorAll(".sched-subject")) {
+        const subject = inp.value.trim();
+        if (!subject) continue;
+        slots.push({ weekday: Number(inp.dataset.weekday), period, start_time: start, end_time: end, subject });
+      }
+    }
+    try {
+      await rpc("set_schedule", { p_class_id: classId, p_slots: slots });
+      toast("Stundenplan gespeichert.");
+      await reload({ silent: true });
+      renderKalAdminSchedule(classId);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+}
+
+// ---- Wiederkehrende Ereignisse ----
+
+function renderKalAdminRecurring() {
+  const rows = recurringEvents.length
+    ? recurringEvents.map((r) => `
+        <li>
+          <span class="grow">
+            <b>${WEEKDAY_LABEL[r.weekday]}${r.start_time ? `, ${fmtTime(r.start_time)}` : ""}</b> — ${esc(r.title)}
+            ${r.class_id ? `<span class="who">${CLASS_ICON[classesList.find((c) => c.id === r.class_id)?.slug] || ""}</span>` : ""}
+          </span>
+          <button type="button" class="icon-btn" data-action="recurring-delete" data-id="${r.id}" title="Löschen">✕</button>
+        </li>`).join("")
+    : `<p class="rubrik-panel-empty">Noch keine wiederkehrenden Ereignisse.</p>`;
+
+  elKalAdminBody.innerHTML = `
+    <h2>Wiederkehrende Ereignisse</h2>
+    <ul class="items">${rows}</ul>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" data-action="admin-back">Zurück</button>
+      <button type="button" class="btn primary" data-action="recurring-add">+ Neu</button>
+    </div>`;
+
+  elKalAdminBody.querySelector("[data-action='admin-back']").addEventListener("click", renderKalAdminHome);
+  elKalAdminBody.querySelectorAll("[data-action='recurring-delete']").forEach((btn) => btn.addEventListener("click", async () => {
+    const ok = await confirmDlg("Dieses wiederkehrende Ereignis löschen?", "Löschen");
+    if (!ok) return;
+    try {
+      await rpc("delete_recurring_event", { p_id: btn.dataset.id });
+      toast("Gelöscht.");
+      await reload({ silent: true });
+      renderKalAdminRecurring();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }));
+  elKalAdminBody.querySelector("[data-action='recurring-add']").addEventListener("click", async () => {
+    const vals = await promptDlg("Neues wiederkehrendes Ereignis", [
+      { name: "title", label: "Titel", placeholder: "z. B. Gemeinsames Frühstück", maxlength: 120 },
+      { name: "weekday", label: "Wochentag", value: "3", options: WOCHENTAG_OPTIONS },
+      { name: "start_time", label: "Uhrzeit (optional)", placeholder: "08:00", optional: true, maxlength: 5 },
+      { name: "class_id", label: "Gilt für", value: activeClassId || "",
+        options: [{ value: "", label: "Beide Klassen" }].concat(
+          classesList.map((cl) => ({ value: cl.id, label: `${CLASS_ICON[cl.slug] || ""} ${cl.name}` }))) },
+      { name: "creator_name", label: "Dein Name bzw. deine Funktion",
+        placeholder: "z. B. Frau Müller, Lehrkraft", maxlength: 80, value: localStorage.getItem(CREATOR_NAME_KEY) || "" },
+    ]);
+    if (!vals) return;
+    localStorage.setItem(CREATOR_NAME_KEY, vals.creator_name);
+    try {
+      await rpc("create_recurring_event", {
+        p: {
+          title: vals.title, weekday: Number(vals.weekday),
+          start_time: vals.start_time || null, class_id: vals.class_id || null,
+          created_by: vals.creator_name,
+        },
+      });
+      toast("Angelegt.");
+      await reload({ silent: true });
+      renderKalAdminRecurring();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+}
+
+// ---- Ferien ----
+
+function renderKalAdminHolidays() {
+  const rows = schoolHolidays.length
+    ? schoolHolidays.map((h) => `
+        <li>
+          <span class="grow"><b>${esc(h.label)}</b> — ${fmtDateLong(h.start_date)} bis ${fmtDateLong(h.end_date)}</span>
+          <button type="button" class="icon-btn" data-action="holiday-delete" data-id="${h.id}" title="Löschen">✕</button>
+        </li>`).join("")
+    : `<p class="rubrik-panel-empty">Noch keine Ferien eingetragen.</p>`;
+
+  elKalAdminBody.innerHTML = `
+    <h2>Ferien &amp; freie Tage</h2>
+    <ul class="items">${rows}</ul>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" data-action="admin-back">Zurück</button>
+      <button type="button" class="btn primary" data-action="holiday-add">+ Neu</button>
+    </div>`;
+
+  elKalAdminBody.querySelector("[data-action='admin-back']").addEventListener("click", renderKalAdminHome);
+  elKalAdminBody.querySelectorAll("[data-action='holiday-delete']").forEach((btn) => btn.addEventListener("click", async () => {
+    const ok = await confirmDlg("Diesen Ferien-/freien Tag löschen?", "Löschen");
+    if (!ok) return;
+    const rest = schoolHolidays.filter((h) => h.id !== btn.dataset.id)
+      .map((h) => ({ label: h.label, start_date: h.start_date, end_date: h.end_date }));
+    try {
+      await rpc("set_school_holidays", { p_holidays: rest });
+      toast("Gelöscht.");
+      await reload({ silent: true });
+      renderKalAdminHolidays();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }));
+  elKalAdminBody.querySelector("[data-action='holiday-add']").addEventListener("click", async () => {
+    const vals = await promptDlg("Neuer Ferien-/freier Tag", [
+      { name: "label", label: "Bezeichnung", placeholder: "z. B. Herbstferien 2026", maxlength: 80 },
+      { name: "start_date", label: "Von (JJJJ-MM-TT)", placeholder: "2026-10-05", maxlength: 10 },
+      { name: "end_date", label: "Bis (JJJJ-MM-TT)", placeholder: "2026-10-18", maxlength: 10 },
+    ]);
+    if (!vals) return;
+    const next = schoolHolidays.map((h) => ({ label: h.label, start_date: h.start_date, end_date: h.end_date }))
+      .concat([{ label: vals.label, start_date: vals.start_date, end_date: vals.end_date }]);
+    try {
+      await rpc("set_school_holidays", { p_holidays: next });
+      toast("Angelegt.");
+      await reload({ silent: true });
+      renderKalAdminHolidays();
+    } catch (err) {
+      toast(err.message, true);
+    }
   });
 }
 
@@ -2441,7 +2689,7 @@ async function doAction(fn, successMsg) {
 const ADMIN_NUR_HAUPTLINK = new Set([
   "edit", "pin", "trash", "restore", "delete-forever", "add-linked", "empty-trash",
   "create-folder", "rename-folder", "delete-folder", "move-file",
-  "archive-card", "unarchive-card",
+  "archive-card", "unarchive-card", "open-kalender-admin",
 ]);
 
 async function handleFeedClick(ev) {
@@ -2607,6 +2855,10 @@ async function handleFeedClick(ev) {
     }
     case "open-card": {
       openCardById(btn.dataset.card);
+      break;
+    }
+    case "open-kalender-admin": {
+      openKalenderAdmin();
       break;
     }
     case "toggle-willkommen": {
@@ -3006,6 +3258,15 @@ async function init() {
       const item = ev.target.closest(".more-item[data-view]");
       if (item) { view = item.dataset.view; render(); }
       if (ev.target.closest("[data-close]")) dlgMore.close();
+    });
+  }
+
+  // Verwaltung Kalender/Stundenplan (nur Hauptlink) — Inhalt wechselt
+  // zwischen mehreren "Screens" (renderKalAdminHome/-Schedule/-...), die
+  // sich jeweils selbst verdrahten; hier nur das Schließen per data-close.
+  if (dlgKalenderAdmin) {
+    dlgKalenderAdmin.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-close]")) dlgKalenderAdmin.close();
     });
   }
 
