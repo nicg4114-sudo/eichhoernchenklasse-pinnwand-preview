@@ -7,7 +7,7 @@
 // Anfragen an Supabase (die eigentlichen Pinnwand-Daten) laufen immer direkt
 // übers Netz, damit nie veraltete Inhalte angezeigt werden.
 
-const CACHE_NAME = "pinnwand-shell-v31";
+const CACHE_NAME = "pinnwand-shell-v32";
 const SHELL_FILES = [
   "./",
   "./index.html",

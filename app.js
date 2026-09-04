@@ -1179,12 +1179,12 @@ function renderTerminAufgabenRow(termine, list) {
   }
 
   const aufgabenTile = `
-    <div class="dash-tile dash-tile-aufgaben ${open.length ? "" : "empty"}">
+    <button class="dash-tile dash-tile-aufgaben ${open.length ? "" : "empty"}" data-action="open-rubrik" data-type="aufgaben">
       <span class="dash-tile-aufgaben-label">Aufgaben</span>
       <span class="dash-tile-aufgaben-count">${open.length
         ? (open.length === 1 ? "1 offene Aufgabe" : `${open.length} offene Aufgaben`)
         : "Keine offenen Aufgaben"}</span>
-    </div>`;
+    </button>`;
 
   let umfrageTile = "";
   if (umfragen.length) {
@@ -1295,6 +1295,31 @@ function renderBeteiligungView(items) {
   return head + `<div class="group-body">${items.length
     ? items.map(renderCard).join("")
     : `<p class="rubrik-panel-empty">Noch keine Beteiligung.</p>`}</div>`;
+}
+
+/* ---------- Aufgaben-Übersicht (Klick auf die Aufgaben-Kachel) ---------- */
+
+function renderAufgabenView(items) {
+  const head = `
+    <div class="dateien-head">
+      <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
+    </div>`;
+  if (!items.length) {
+    return head + `<p class="rubrik-panel-empty">Aktuell keine als Aufgabe markierten Einträge.</p>`;
+  }
+  const open = items.filter((c) => !isAufgabeErledigt(c.id));
+  const done = items.filter((c) => isAufgabeErledigt(c.id));
+  const sortByNeu = (a, b) => String(b.created_at).localeCompare(String(a.created_at));
+  open.sort(sortByNeu);
+  done.sort(sortByNeu);
+
+  let body = `<div class="group-body">${open.map((c) => renderCard(c)).join("")}</div>`;
+  if (done.length) {
+    body += `
+      <h2 class="group-label" style="margin:18px 2px 12px">Für dich schon erledigt</h2>
+      <div class="group-body">${done.map((c) => renderCard(c)).join("")}</div>`;
+  }
+  return head + body;
 }
 
 /* ---------- Ordner-Unterseite (Rubrik "Datei") ---------- */
@@ -1791,7 +1816,7 @@ const EMPTY_TEXT = {
 
 // Views mit eigener Leer-Anzeige (Karussell/Kacheln zeigen ihren
 // Leer-Zustand selbst) — der generische Hinweistext ist dort überflüssig.
-const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender"]);
+const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender", "aufgaben"]);
 
 // Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint — bewusst
 // höher als eine Bildschirmhöhe, damit er nicht schon nach kurzem Scrollen
@@ -1879,6 +1904,7 @@ function hashFromState() {
   if (view === "archiv") return openArchivId ? `#archiv-${openArchivId}` : "#archiv";
   if (view === "papierkorb") return "#papierkorb";
   if (view === "kalender") return calendarSelectedDate ? `#kalender-${calendarSelectedDate}` : "#kalender";
+  if (view === "aufgaben") return "#aufgaben";
   return "";
 }
 
@@ -1902,7 +1928,7 @@ function applyHash(hash) {
     calendarMonth.setDate(1);
   } else if (h === "kalender") {
     view = "kalender"; calendarSelectedDate = null; calendarMonth = null;
-  }
+  } else if (h === "aufgaben") { view = "aufgaben"; }
   else if (!h.startsWith("karte-")) { view = "feed"; }
 }
 
@@ -2006,6 +2032,8 @@ function render() {
   } else if (view === "kalender") {
     elFeed.innerHTML = renderKalenderView();
     wireKalender();
+  } else if (view === "aufgaben") {
+    elFeed.innerHTML = renderAufgabenView(list.filter((c) => c.is_aufgabe));
   } else {
     elFeed.innerHTML = renderArchivView(list);
   }
@@ -2842,6 +2870,8 @@ async function handleFeedClick(ev) {
         view = "kalender";
         calendarSelectedDate = null;
         calendarMonth = null;
+      } else if (type === "aufgaben") {
+        view = "aufgaben";
       }
       render();
       break;

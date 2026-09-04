@@ -611,8 +611,12 @@ main {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
   border: 1px solid var(--important-bg);
   background: var(--important-bg);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
 }
 .dash-tile-aufgaben.empty { border-color: var(--line); background: var(--line-soft); }
 .dash-tile-aufgaben-label {
