@@ -55,6 +55,7 @@ const ICONS = {
   warning: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2l8 14H2z"/><line x1="10" y1="8.3" x2="10" y2="12.3"/><circle cx="10" cy="14.6" r=".9" fill="currentColor" stroke="none"/></svg>`,
   check: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4.5,10.5 8,14 15.5,6"/></svg>`,
   home: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 9.2L10 3.5l6.8 5.7"/><path d="M4.8 8v7.5a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1V8"/></svg>`,
+  kalender: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4.2" width="14" height="12" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="6.5" y1="2.5" x2="6.5" y2="5.5"/><line x1="13.5" y1="2.5" x2="13.5" y2="5.5"/><circle cx="7.3" cy="11.3" r=".9" fill="currentColor" stroke="none"/></svg>`,
 };
 
 /* ---------- Versionshinweise ---------- */
@@ -113,6 +114,13 @@ let view = "feed";        // dashboard | feed | archiv | papierkorb | dateien
 let loaded = false;
 let classesList = [];     // aus DB geladen: [{id, slug, name}, ...]
 let foldersList = [];     // aus DB geladen: [{id, class_id, name, created_by}, ...]
+let scheduleSlots = [];   // Stundenplan: [{id, class_id, weekday, period, start_time, end_time, subject, room}, ...]
+let recurringEvents = []; // wiederkehrende Termine: [{id, class_id, weekday, start_time, title, body}, ...]
+let schoolHolidays = [];  // Ferien/freie Tage: [{id, label, start_date, end_date}, ...]
+// Kalender-Ansicht (siehe renderKalenderView): Monat, der gerade angezeigt
+// wird (immer der 1. des Monats), und ein evtl. aufgeklappter Tag darunter.
+let calendarMonth = null;
+let calendarSelectedDate = null;
 // Ordner-Unterseite (Rubrik "Datei", siehe renderFolderView): undefined =
 // Ordner-Raster, "" = Inhalt von "Ohne Ordner", sonst eine Ordner-Id.
 let openFolderId;
@@ -492,6 +500,24 @@ async function fetchFolders() {
   return res.json();
 }
 
+async function fetchScheduleSlots() {
+  const res = await fetch(`${REST()}/schedule_slots?select=*&order=weekday.asc,period.asc`, { headers: AUTH() });
+  if (!res.ok) throw await apiError(res);
+  return res.json();
+}
+
+async function fetchRecurringEvents() {
+  const res = await fetch(`${REST()}/recurring_events?select=*&order=weekday.asc,start_time.asc`, { headers: AUTH() });
+  if (!res.ok) throw await apiError(res);
+  return res.json();
+}
+
+async function fetchSchoolHolidays() {
+  const res = await fetch(`${REST()}/school_holidays?select=*&order=start_date.asc`, { headers: AUTH() });
+  if (!res.ok) throw await apiError(res);
+  return res.json();
+}
+
 async function loadClasses() {
   try {
     classesList = await fetchClasses();
@@ -591,13 +617,19 @@ async function uploadFile(file) {
 
 async function reload({ silent = false } = {}) {
   try {
-    // Scheitert das Ordner-Laden (z. B. Migration noch nicht eingespielt),
-    // soll das die Karten selbst nicht mit blockieren.
-    const [cardsData, foldersData] = await Promise.all([
+    // Scheitert das Laden von Ordnern/Stundenplan/Ferien (z. B. Migration
+    // noch nicht eingespielt), soll das die Karten selbst nicht blockieren.
+    const [cardsData, foldersData, slotsData, recurringData, holidaysData] = await Promise.all([
       fetchCards(), fetchFolders().catch(() => foldersList),
+      fetchScheduleSlots().catch(() => scheduleSlots),
+      fetchRecurringEvents().catch(() => recurringEvents),
+      fetchSchoolHolidays().catch(() => schoolHolidays),
     ]);
     cards = cardsData;
     foldersList = foldersData;
+    scheduleSlots = slotsData;
+    recurringEvents = recurringData;
+    schoolHolidays = holidaysData;
     loaded = true;
     elNotice.hidden = true;
     // Nur beim allerersten erfolgreichen Laden relevant — danach ist
@@ -1326,6 +1358,177 @@ function renderFolderView(dateiCards) {
         : `<p class="rubrik-panel-empty">Noch keine Datei in diesem Ordner.</p>`}</div>`;
 }
 
+/* ---------- Kalender & Stundenplan (ideen-backlog.md #11) ---------- */
+
+const WEEKDAY_LABEL = ["", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+const WEEKDAY_SHORT = ["", "Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+// JS: 0=Sonntag…6=Samstag. Wir zählen wie in der Datenbank 1=Montag…7=Sonntag.
+function isoWeekday(date) {
+  const d = date.getDay();
+  return d === 0 ? 7 : d;
+}
+
+function toISODate(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+// Ferienzeitraum, in dem das Datum liegt (oder null) — an diesen Tagen
+// blenden Stundenplan und wiederkehrende Termine aus (siehe Migration 018).
+function holidayForDate(dateStr) {
+  return schoolHolidays.find((h) => dateStr >= h.start_date && dateStr <= h.end_date) || null;
+}
+
+// Wie inActiveClass() bei Karten, nur allgemein für class_id-Felder anderer
+// Tabellen (recurring_events) — eigene Klasse + "Gemeinsam" sind sichtbar.
+function inActiveClassGeneric(classId) {
+  return !activeClassId || classId === activeClassId || !classId;
+}
+
+function scheduleForDate(dateStr, weekday) {
+  if (holidayForDate(dateStr)) return [];
+  if (!activeClassId) return []; // Stundenplan ist pro Klasse — bei "Beide Klassen" nicht eindeutig
+  return scheduleSlots
+    .filter((s) => s.weekday === weekday && s.class_id === activeClassId)
+    .sort((a, b) => a.period - b.period);
+}
+
+function recurringForDate(dateStr, weekday) {
+  if (holidayForDate(dateStr)) return [];
+  return recurringEvents
+    .filter((r) => r.weekday === weekday && inActiveClassGeneric(r.class_id))
+    .sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")));
+}
+
+function termineForDate(dateStr) {
+  return cards.filter((c) =>
+    c.type === "termin" && !c.trashed_at && c.event_date === dateStr && inActiveClass(c));
+}
+
+// Tage im aktuell angezeigten Monat, für die es überhaupt etwas zu zeigen
+// gibt (Termin, wiederkehrender Termin oder Ferien) — für den Punkt im
+// Monatsraster.
+function dayHasContent(dateStr, weekday) {
+  if (holidayForDate(dateStr)) return true;
+  if (termineForDate(dateStr).length) return true;
+  if (recurringForDate(dateStr, weekday).length) return true;
+  return false;
+}
+
+function renderKalenderMonth() {
+  const month = calendarMonth || (calendarMonth = (() => { const t = todayStart(); t.setDate(1); return t; })());
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const startOffset = isoWeekday(first) - 1; // Raster beginnt am Montag
+  const gridStart = new Date(first);
+  gridStart.setDate(gridStart.getDate() - startOffset);
+  const today = toISODate(todayStart());
+
+  let cells = "";
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    const dateStr = toISODate(d);
+    const weekday = isoWeekday(d);
+    const inMonth = d.getMonth() === month.getMonth();
+    const holiday = holidayForDate(dateStr);
+    const cls = [
+      "cal-day",
+      inMonth ? "" : "outside",
+      dateStr === today ? "is-today" : "",
+      dateStr === calendarSelectedDate ? "is-selected" : "",
+      holiday ? "is-holiday" : "",
+    ].filter(Boolean).join(" ");
+    cells += `
+      <button type="button" class="${cls}" data-action="cal-day" data-date="${dateStr}" title="${holiday ? esc(holiday.label) : ""}">
+        <span class="cal-day-num">${d.getDate()}</span>
+        ${dayHasContent(dateStr, weekday) && !holiday ? `<span class="cal-day-dot"></span>` : ""}
+      </button>`;
+    // Nach dem letzten Tag des Monats nicht unnötig eine ganze weitere,
+    // komplett leere Woche anhängen.
+    if (i >= 34 && d.getMonth() !== month.getMonth() && (i + 1) % 7 === 0) break;
+  }
+
+  return `
+    <div class="cal-head">
+      <button type="button" class="icon-btn" data-action="cal-prev" aria-label="Vorheriger Monat">${ICONS.chevron.replace("<svg", `<svg style="transform:scaleX(-1)"`)}</button>
+      <b>${month.toLocaleDateString("de-DE", { month: "long", year: "numeric" })}</b>
+      <button type="button" class="icon-btn" data-action="cal-next" aria-label="Nächster Monat">${ICONS.chevron}</button>
+    </div>
+    <div class="cal-weekdays">${WEEKDAY_SHORT.slice(1).map((w) => `<span>${w}</span>`).join("")}</div>
+    <div class="cal-grid">${cells}</div>`;
+}
+
+function renderKalenderDay() {
+  if (!calendarSelectedDate) return "";
+  const dateStr = calendarSelectedDate;
+  const weekday = isoWeekday(parseISODate(dateStr));
+  const holiday = holidayForDate(dateStr);
+  const schedule = scheduleForDate(dateStr, weekday);
+  const recurring = recurringForDate(dateStr, weekday);
+  const termine = termineForDate(dateStr);
+
+  let body = "";
+  if (holiday) {
+    body += `<p class="cal-day-holiday">${ICONS.warning}<span>${esc(holiday.label)} — kein Unterricht</span></p>`;
+  } else {
+    if (schedule.length) {
+      body += `<div class="cal-schedule">${schedule.map((s) => {
+        const linked = cards.filter((c) =>
+          c.type === "hinweis" && !c.trashed_at && c.schedule_slot_id === s.id && inActiveClass(c));
+        return `
+          <div class="cal-schedule-row">
+            <span class="cal-schedule-time">${fmtTime(s.start_time)}</span>
+            <span class="cal-schedule-subject">${esc(s.subject)}${s.room ? ` <span class="cal-schedule-room">· ${esc(s.room)}</span>` : ""}</span>
+          </div>
+          ${linked.map((c) => `<div class="cal-schedule-hinweis" data-action="open-card" data-card="${c.id}">${ICONS.hinweis}<span>${esc(c.title)}</span></div>`).join("")}`;
+      }).join("")}</div>`;
+    } else if (!activeClassId) {
+      body += `<p class="rubrik-panel-empty">Bitte eine Klasse wählen, um den Stundenplan zu sehen.</p>`;
+    }
+    if (recurring.length) {
+      body += recurring.map((r) => `
+        <div class="event-row">
+          <div class="event-date-box"><b>${r.start_time ? fmtTime(r.start_time) : "—"}</b><span>jede Woche</span></div>
+          <div class="event-info"><b>${esc(r.title)}</b>${r.body ? `<span>${esc(r.body)}</span>` : ""}</div>
+        </div>`).join("");
+    }
+  }
+
+  if (termine.length) body += termine.map((c) => renderCard(c)).join("");
+
+  if (!body) body = `<p class="rubrik-panel-empty">Nichts los an diesem Tag.</p>`;
+
+  return `
+    <div class="cal-day-detail">
+      <h2 class="group-label">${esc(fmtDateLong(dateStr))}</h2>
+      ${body}
+    </div>`;
+}
+
+function renderKalenderView() {
+  const head = `
+    <div class="dateien-head">
+      <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
+    </div>`;
+  return head + `<div class="cal-wrap">${renderKalenderMonth()}</div>${renderKalenderDay()}`;
+}
+
+function wireKalender() {
+  elFeed.querySelectorAll("[data-action='cal-day']").forEach((btn) => btn.addEventListener("click", () => {
+    const date = btn.dataset.date;
+    calendarSelectedDate = calendarSelectedDate === date ? null : date;
+    render();
+  }));
+  elFeed.querySelector("[data-action='cal-prev']")?.addEventListener("click", () => {
+    calendarMonth.setMonth(calendarMonth.getMonth() - 1);
+    render();
+  });
+  elFeed.querySelector("[data-action='cal-next']")?.addEventListener("click", () => {
+    calendarMonth.setMonth(calendarMonth.getMonth() + 1);
+    render();
+  });
+}
+
 const EMPTY_TEXT = {
   feed: "Noch nichts an der Pinnwand. Mit dem +-Knopf unten geht's los.",
   archiv: "Noch nichts im Archiv.",
@@ -1334,7 +1537,7 @@ const EMPTY_TEXT = {
 
 // Views mit eigener Leer-Anzeige (Karussell/Kacheln zeigen ihren
 // Leer-Zustand selbst) — der generische Hinweistext ist dort überflüssig.
-const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung"]);
+const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender"]);
 
 // Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint — bewusst
 // höher als eine Bildschirmhöhe, damit er nicht schon nach kurzem Scrollen
@@ -1421,6 +1624,7 @@ function hashFromState() {
   if (view === "dateien") return openFolderId === undefined ? "#dateien" : `#dateien-${openFolderId}`;
   if (view === "archiv") return openArchivId ? `#archiv-${openArchivId}` : "#archiv";
   if (view === "papierkorb") return "#papierkorb";
+  if (view === "kalender") return calendarSelectedDate ? `#kalender-${calendarSelectedDate}` : "#kalender";
   return "";
 }
 
@@ -1437,6 +1641,14 @@ function applyHash(hash) {
   else if (h.startsWith("archiv-")) { view = "archiv"; openArchivId = h.slice(7); }
   else if (h === "archiv") { view = "archiv"; openArchivId = null; }
   else if (h === "papierkorb") { view = "papierkorb"; }
+  else if (h.startsWith("kalender-")) {
+    view = "kalender";
+    calendarSelectedDate = h.slice(9);
+    calendarMonth = parseISODate(calendarSelectedDate);
+    calendarMonth.setDate(1);
+  } else if (h === "kalender") {
+    view = "kalender"; calendarSelectedDate = null; calendarMonth = null;
+  }
   else if (!h.startsWith("karte-")) { view = "feed"; }
 }
 
@@ -1537,6 +1749,9 @@ function render() {
          </div>`
       : "";
     elFeed.innerHTML = toolbar + list.map(renderCard).join("");
+  } else if (view === "kalender") {
+    elFeed.innerHTML = renderKalenderView();
+    wireKalender();
   } else {
     elFeed.innerHTML = renderArchivView(list);
   }
@@ -2388,6 +2603,10 @@ async function handleFeedClick(ev) {
     case "start-back": {
       view = "feed";
       render();
+      break;
+    }
+    case "open-card": {
+      openCardById(btn.dataset.card);
       break;
     }
     case "toggle-willkommen": {
