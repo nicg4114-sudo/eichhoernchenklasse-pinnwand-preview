@@ -1053,6 +1053,7 @@ main {
   margin-bottom: 10px;
 }
 .cal-head b { text-transform: capitalize; }
+.cal-head .icon-btn svg { width: 18px; height: 18px; display: block; }
 .cal-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
