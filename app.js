@@ -36,14 +36,6 @@ const TYPE_LABELS = {
   datei: "Datei",
 };
 
-// Die drei Bubbles über der Fußleiste auf der Startseite (siehe
-// renderBubbles) — "Beteiligung" bündelt Umfrage/Liste/Tabelle, weil bei
-// allen dreien Eltern aktiv etwas eintragen/ankreuzen statt nur zu lesen.
-// Jede Karte behält ihren echten Typ für Badge/Farbe/Erstellen-Dialog
-// (siehe TYPE_LABELS). Hinweis hat keine Bubble — läuft übers Karussell.
-const BUBBLE_ORDER = ["termin", "beteiligung", "datei"];
-const RUBRIK_LABEL = { termin: "Termin", beteiligung: "Beteiligung", datei: "Datei" };
-const RUBRIK_LABEL_PLURAL = { termin: "Termine", beteiligung: "Beteiligungen", datei: "Dateien" };
 
 // Kleines, einheitliches Icon-Set (ersetzt Emojis für ein ruhigeres Bild).
 const ICONS = {
@@ -64,10 +56,6 @@ const ICONS = {
   check: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4.5,10.5 8,14 15.5,6"/></svg>`,
   home: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 9.2L10 3.5l6.8 5.7"/><path d="M4.8 8v7.5a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1V8"/></svg>`,
 };
-
-// Icons je Bubble (siehe BUBBLE_ORDER) — "Beteiligung" bündelt drei echte
-// Kartentypen (Umfrage/Liste/Tabelle) unter einem gemeinsamen Icon.
-const RUBRIK_ICON = { termin: ICONS.termin, beteiligung: ICONS.beteiligung, datei: ICONS.datei };
 
 /* ---------- Versionshinweise ---------- */
 
@@ -146,6 +134,10 @@ let suppressHistoryPush = false;
 // neuen anzulegen (kanonisiert z. B. einen "#karte-…"-Link zur passenden
 // Ansicht, ohne die Zurück-Taste mit einem Zwischenschritt zu belasten).
 let firstHistorySyncDone = false;
+// Richtung für die Übergangsanimation (ideen-backlog.md #5): "forward" bei
+// jeder normalen Navigation (Standard), "back" nur direkt nach einem
+// popstate (Zurück/Vorwärts-Taste/-Geste) — siehe render()/popstate-Listener.
+let navDirection = "forward";
 
 // Welche Klasse gerade "meine" ist — rein clientseitiger Anzeigefilter,
 // kein echter Zugriffsschutz (der kommt später mit Einmal-Codes, siehe
@@ -224,7 +216,6 @@ const elFeed = $("feed");
 const elEmpty = $("empty");
 const elNotice = $("notice");
 const elFab = $("fab");
-const elDashBubbles = $("dashBubbles");
 const elMain = document.querySelector("main");
 const elScrollTopBtn = $("scrollTopBtn");
 const elClassSelect = $("classSelect");
@@ -235,7 +226,9 @@ const dlgEditor = $("dlgEditor");
 const dlgConfirm = $("dlgConfirm");
 const dlgPrompt = $("dlgPrompt");
 const dlgVersion = $("dlgVersion");
-const elVersionBtn = $("versionBtn");
+const elVersionBtn = $("moreVersionBtn");
+const dlgMore = $("dlgMore");
+const elMoreBtn = $("moreBtn");
 
 /* ---------- Hilfsfunktionen ---------- */
 
@@ -456,7 +449,7 @@ function toast(msg, isError = false) {
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion].some((d) => d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore].some((d) => d.open);
 }
 
 /* ---------- API ---------- */
@@ -1043,8 +1036,6 @@ function renderKurznachricht(c) {
 /* ---------- Startseite (Dashboard) ---------- */
 
 // list: alle sichtbaren, nicht archivierten Karten der aktiven Klasse.
-// Die drei Bubbles laufen NICHT hier mit rein — die sitzen fest in
-// #dashBubbles über der Fußleiste, siehe render().
 function renderStart(list) {
   const hinweise = list.filter((c) => c.type === "hinweis");
   const termine = list.filter((c) => c.type === "termin");
@@ -1062,6 +1053,11 @@ function renderStart(list) {
 // termine enthält dank visibleCards() ohnehin nur solche) Termin, dessen
 // Titel "Elternabend" enthält. Bewusst unabhängig von renderTerminAufgabenRow
 // darunter, das ja jeden beliebigen Termintyp zeigen kann.
+// Ein-/ausgeklappt-Zustand des Begrüßungsblocks, geräteseitig gemerkt
+// (siehe ideen-backlog.md #14) — Titel bleibt als Kopfzeile immer sichtbar,
+// nur Unterzeile/Elternabend-Hinweis klappen zu, um Platz zu sparen.
+const WILLKOMMEN_COLLAPSED_KEY = "pinnwand_willkommen_eingeklappt";
+
 function renderWillkommen(termine) {
   const cls = classesList.find((c) => c.id === activeClassId);
   const ortsname = cls ? (CLASS_GREETING_NAME[cls.slug] || `${cls.name}-Pinnwand`) : "Klassen-Pinnwand";
@@ -1076,11 +1072,17 @@ function renderWillkommen(termine) {
       Unser nächster Elternabend findet am ${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} statt.
     </div>` : "";
 
+  const collapsed = localStorage.getItem(WILLKOMMEN_COLLAPSED_KEY) === "1";
   return `
-    <div class="willkommen">
-      <div class="willkommen-title">Herzlich willkommen auf der ${esc(ortsname)}</div>
-      <div class="willkommen-sub">Hier findest du alles Organisatorische rund um die Klasse.</div>
-      ${elternabendHtml}
+    <div class="willkommen ${collapsed ? "collapsed" : ""}">
+      <button type="button" class="willkommen-toggle" data-action="toggle-willkommen">
+        <span class="willkommen-title">Herzlich willkommen auf der ${esc(ortsname)}</span>
+        <span class="willkommen-chevron">${ICONS.chevron}</span>
+      </button>
+      <div class="willkommen-body"><div class="willkommen-body-inner">
+        <div class="willkommen-sub">Hier findest du alles Organisatorische rund um die Klasse.</div>
+        ${elternabendHtml}
+      </div></div>
     </div>`;
 }
 
@@ -1093,24 +1095,42 @@ function renderHinweisCarousel(hinweise) {
   }
   const slides = hinweise.map((c) =>
     `<div class="hinweis-slide">${c.is_kurznachricht ? renderKurznachricht(c) : renderCard(c)}</div>`).join("");
-  const dots = hinweise.length > 1
+  const multi = hinweise.length > 1;
+  // Punkte sind jetzt klickbar (springen direkt zur jeweiligen Karte,
+  // siehe wireHinweisCarousel) statt nur Anzeige zu sein.
+  const dots = multi
     ? `<div class="hinweis-dots">${hinweise.map((_, i) =>
-        `<span class="hinweis-dot ${i === 0 ? "active" : ""}"></span>`).join("")}</div>`
+        `<button type="button" class="hinweis-dot ${i === 0 ? "active" : ""}" data-index="${i}" aria-label="Hinweis ${i + 1} von ${hinweise.length}"></button>`).join("")}</div>`
     : "";
-  return `<div class="hinweis-carousel" id="hinweisCarousel">${slides}</div>${dots}`;
+  // Pfeile fürs Weiterklicken ohne Wisch-Geste (z. B. am Computer ohne
+  // Trackpad) und ein "1/2"-Zähler, damit auf einen Blick klar ist, dass es
+  // mehr als eine Karte gibt (siehe ideen-backlog.md #6).
+  const arrows = multi ? `
+    <button type="button" class="hinweis-arrow prev" data-dir="-1" aria-label="Vorheriger Hinweis">${ICONS.chevron}</button>
+    <button type="button" class="hinweis-arrow next" data-dir="1" aria-label="Nächster Hinweis">${ICONS.chevron}</button>` : "";
+  const counter = multi ? `<span class="hinweis-counter">1/${hinweise.length}</span>` : "";
+  return `
+    <div class="hinweis-carousel-wrap">
+      <div class="hinweis-carousel" id="hinweisCarousel">${slides}</div>
+      ${arrows}
+      ${counter}
+    </div>
+    ${dots}`;
 }
 
-// Zwei schlanke Kacheln nebeneinander statt zweier gestapelter Vollbreite-
-// Abschnitte — spart deutlich Höhe. Antippen der Termin-Kachel führt zur
-// Termin-Rubrik mit genau diesem Termin aufgeklappt; die Aufgaben-Kachel
-// ist bewusst rein informativ (nur die Anzahl), ohne eigenes Aufklappen —
-// erledigt wird direkt auf der jeweiligen Karte markiert (siehe
-// aufgabeBlockHtml), dort wo man sie beim Durchsehen ohnehin sieht. Gibt
-// es keinen anstehenden Termin, nimmt die Aufgaben-Kachel die volle
-// Breite ein, statt eine leere Hälfte zu zeigen.
+// Schlanke Kacheln nebeneinander statt gestapelter Vollbreite-Abschnitte —
+// "Was steht an" (ideen-backlog.md #16): Termin, Aufgaben und aktive
+// Umfragen auf einen Blick. Antippen der Termin-Kachel führt zur Termin-
+// Rubrik mit genau diesem Termin aufgeklappt, die Umfragen-Kachel zur
+// Beteiligung-Rubrik. Aufgaben- und Umfragen-Kachel sind bewusst rein
+// informativ (nur die Anzahl), ohne eigenes Aufklappen — erledigt bzw.
+// abgestimmt wird direkt auf der jeweiligen Karte, dort wo man sie beim
+// Durchsehen ohnehin sieht. Die Reihe passt sich der tatsächlichen Anzahl
+// an Kacheln an (1–3), statt leere Plätze stehen zu lassen.
 function renderTerminAufgabenRow(termine, list) {
   const next = [...termine].sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))[0];
   const open = list.filter((c) => c.is_aufgabe && !isAufgabeErledigt(c.id));
+  const umfragen = list.filter((c) => c.type === "umfrage");
 
   let terminTile = "";
   if (next) {
@@ -1132,26 +1152,17 @@ function renderTerminAufgabenRow(termine, list) {
         : "Keine offenen Aufgaben"}</span>
     </div>`;
 
-  return `<div class="dash-tile-row${next ? "" : " single"}">${terminTile}${aufgabenTile}</div>`;
-}
-
-// Drei Bubbles, Zugang zu den vollen Rubrik-Ansichten (Termin/Beteiligung/
-// Datei). Hinweis hat keine eigene, die läuft ja schon oben als Karussell.
-// Wird in #dashBubbles gerendert (fest über der Fußleiste), nicht in den
-// scrollbaren Feed — siehe render().
-function renderBubbles(groups) {
-  const bubbles = BUBBLE_ORDER.map((r) => {
-    const items = groups[r] || [];
-    return `
-      <button class="dash-bubble" data-action="open-rubrik" data-type="${r}">
-        <span class="dash-bubble-icon type-${r}">
-          ${items.length ? `<span class="count-badge">${items.length}</span>` : ""}
-          ${RUBRIK_ICON[r]}
-        </span>
-        <span class="dash-bubble-label">${RUBRIK_LABEL[r]}</span>
+  let umfrageTile = "";
+  if (umfragen.length) {
+    umfrageTile = `
+      <button class="dash-tile dash-tile-umfrage" data-action="open-rubrik" data-type="beteiligung">
+        <span class="dash-tile-umfrage-label">Umfragen</span>
+        <span class="dash-tile-umfrage-count">${umfragen.length === 1 ? "1 offene Umfrage" : `${umfragen.length} offene Umfragen`}</span>
       </button>`;
-  }).join("");
-  return `<div class="dash-bubbles">${bubbles}</div>`;
+  }
+
+  const tiles = [terminTile, aufgabenTile, umfrageTile].filter(Boolean);
+  return `<div class="dash-tile-row count-${tiles.length}">${tiles.join("")}</div>`;
 }
 
 /* ---------- Termin-Rubrik (Akkordeon-Streifen + Zeitstrahl) ---------- */
@@ -1348,6 +1359,42 @@ function wireHinweisCarousel() {
   if (hinweisCarouselIndex >= slideCount) hinweisCarouselIndex = 0;
   el.scrollLeft = hinweisCarouselIndex * el.clientWidth;
   const dots = elFeed.querySelectorAll(".hinweis-dot");
+  const counter = elFeed.querySelector(".hinweis-counter");
+  const updateIndicators = () => {
+    dots.forEach((d, i) => d.classList.toggle("active", i === hinweisCarouselIndex));
+    if (counter) counter.textContent = `${hinweisCarouselIndex + 1}/${slideCount}`;
+  };
+  updateIndicators();
+
+  // Punkte anklickbar (direkt zur jeweiligen Karte) und Pfeile für den
+  // Wechsel ohne Wisch-Geste (siehe renderHinweisCarousel, #6).
+  dots.forEach((d) => d.addEventListener("click", () => {
+    el.scrollTo({ left: Number(d.dataset.index) * el.clientWidth, behavior: "smooth" });
+  }));
+  elFeed.querySelectorAll(".hinweis-arrow").forEach((btn) => btn.addEventListener("click", () => {
+    const target = Math.max(0, Math.min(slideCount - 1, hinweisCarouselIndex + Number(btn.dataset.dir)));
+    el.scrollTo({ left: target * el.clientWidth, behavior: "smooth" });
+  }));
+
+  // Karten, die trotz fester Höhe (siehe style.css) höher sind als ihr
+  // sichtbarer Ausschnitt, bekommen einen "Mehr anzeigen"-Knopf (#2 aus
+  // ideen-backlog.md) — nur wenn wirklich nötig, damit kurze Hinweise
+  // ohne unnötigen Knopf bleiben.
+  elFeed.querySelectorAll(".hinweis-slide > .card").forEach((card) => {
+    if (card.classList.contains("expanded") || card.querySelector(".hinweis-expand-btn")) return;
+    if (card.scrollHeight <= card.clientHeight + 2) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "hinweis-expand-btn";
+    btn.textContent = "Mehr anzeigen";
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const expanded = card.classList.toggle("expanded");
+      btn.textContent = expanded ? "Weniger anzeigen" : "Mehr anzeigen";
+    });
+    card.appendChild(btn);
+  });
+
   let ticking = false;
   el.addEventListener("scroll", () => {
     if (ticking) return;
@@ -1355,7 +1402,7 @@ function wireHinweisCarousel() {
     requestAnimationFrame(() => {
       const w = el.clientWidth || 1;
       hinweisCarouselIndex = Math.round(el.scrollLeft / w);
-      dots.forEach((d, i) => d.classList.toggle("active", i === hinweisCarouselIndex));
+      updateIndicators();
       ticking = false;
     });
   }, { passive: true });
@@ -1406,19 +1453,22 @@ function applyInitialHash() {
 // aktuellen Zustand ab. Unverändert (z. B. bei der stillen 60-Sekunden-
 // Aktualisierung) → nichts tun. Erster Aufruf überhaupt → ersetzen statt
 // einen neuen Verlaufseintrag anzulegen. Ein echter Navigationsschritt →
-// neuer Verlaufseintrag, damit die Zurück-Taste greift.
+// neuer Verlaufseintrag, damit die Zurück-Taste greift. Rückgabewert
+// (wirklich navigiert?) steuert die Übergangsanimation in render(), siehe
+// dort — eine unveränderte Aktualisierung soll nicht jedes Mal "wackeln".
 function syncHistory() {
-  if (suppressHistoryPush) return;
+  if (suppressHistoryPush) return false;
   const hash = hashFromState();
   const changed = hash !== (location.hash || "");
-  if (!changed && firstHistorySyncDone) return;
+  if (!changed && firstHistorySyncDone) return false;
   const url = location.pathname + location.search + hash;
   if (!firstHistorySyncDone) {
     history.replaceState({ hash }, "", url);
     firstHistorySyncDone = true;
-  } else {
-    history.pushState({ hash }, "", url);
+    return false;
   }
+  history.pushState({ hash }, "", url);
+  return true;
 }
 
 // Springt direkt zu einer Karte: bestimmt die passende Ansicht (inkl.
@@ -1462,23 +1512,17 @@ function openCardById(id) {
 function render() {
   document.querySelectorAll("#viewTabs button").forEach((b) =>
     b.classList.toggle("active", b.dataset.view === view));
-  elFab.style.display = view === "feed" && configured && !classLocked ? "" : "none";
+  // Sitzt seit ideen-backlog.md #17 fest oben in der Kopfzeile statt nur
+  // auf der Startseite über der Fußleiste — deshalb jetzt ansichtsunabhängig.
+  elFab.style.display = configured && !classLocked ? "" : "none";
   updateScrollTopButton();
 
   if (!loaded) return;
   const list = visibleCards();
 
-  elMain.classList.toggle("has-dash-bubbles", view === "feed");
-  elDashBubbles.hidden = view !== "feed";
-
   if (view === "feed") {
     elFeed.innerHTML = renderStart(list);
     wireHinweisCarousel();
-    elDashBubbles.innerHTML = renderBubbles({
-      termin: list.filter((c) => c.type === "termin"),
-      beteiligung: list.filter((c) => c.type === "umfrage" || c.type === "liste" || c.type === "tabelle"),
-      datei: list.filter((c) => c.type === "datei"),
-    });
   } else if (view === "termine") {
     elFeed.innerHTML = renderTermineView(list.filter((c) => c.type === "termin"));
   } else if (view === "beteiligung") {
@@ -1499,7 +1543,17 @@ function render() {
 
   elEmpty.textContent = EMPTY_TEXT[view] || "";
   elEmpty.hidden = EIGENE_LEER_ANZEIGE.has(view) ? true : list.length > 0;
-  syncHistory();
+
+  // Dezente Übergangsanimation nur bei echter Navigation (ideen-backlog.md
+  // #5) — eine unveränderte stille Aktualisierung (60-Sekunden-Timer) soll
+  // den Feed nicht bei jedem Mal neu einwischen lassen.
+  const navigated = syncHistory();
+  if (navigated) {
+    elFeed.classList.remove("nav-forward", "nav-back");
+    void elFeed.offsetWidth; // Reflow erzwingen, damit die Animation bei jedem Aufruf neu startet
+    elFeed.classList.add(navDirection === "back" ? "nav-back" : "nav-forward");
+  }
+  navDirection = "forward";
 }
 
 /* ---------- Dialoge: Bestätigen und Nachfragen ---------- */
@@ -2336,6 +2390,12 @@ async function handleFeedClick(ev) {
       render();
       break;
     }
+    case "toggle-willkommen": {
+      const now = localStorage.getItem(WILLKOMMEN_COLLAPSED_KEY) === "1";
+      localStorage.setItem(WILLKOMMEN_COLLAPSED_KEY, now ? "0" : "1");
+      render();
+      break;
+    }
     case "aufgabe-done": {
       setAufgabeErledigt(btn.dataset.card, true);
       render();
@@ -2520,6 +2580,7 @@ function openVersionDialog() {
   dlgVersion.showModal();
   localStorage.setItem(VERSION_SEEN_KEY, VERSIONS[0].version);
   elVersionBtn.classList.remove("has-update");
+  elMoreBtn?.classList.remove("has-update");
 }
 
 // Beim Start prüfen, ob es seit dem letzten Besuch dieses Geräts eine neue
@@ -2534,6 +2595,10 @@ function checkForNewVersion() {
     return;
   }
   elVersionBtn.classList.add("has-update");
+  // Der Versions-Button steckt jetzt im "Mehr"-Menü (ideen-backlog.md
+  // #17) und ist ohne den Punkt hier auf dem sichtbaren "Mehr"-Knopf
+  // selbst nicht mehr erkennbar, dass es was Neues gibt.
+  elMoreBtn?.classList.add("has-update");
   openVersionDialog();
 }
 
@@ -2623,6 +2688,10 @@ async function init() {
   // siehe hashFromState()/syncHistory() oben.
   window.addEventListener("popstate", () => {
     suppressHistoryPush = true;
+    // Browser unterscheidet Vor/Zurück nicht im Event selbst — beides als
+    // "back" behandeln ist die im Alltag weit häufigere Richtung und für
+    // eine bewusst dezente Animation genau genug (#5 aus ideen-backlog.md).
+    navDirection = "back";
     applyHash(location.hash);
     render();
     suppressHistoryPush = false;
@@ -2649,7 +2718,6 @@ async function init() {
   // Feed-Interaktionen
   elFeed.addEventListener("click", handleFeedClick);
   elFeed.addEventListener("change", handleFeedChange);
-  elDashBubbles.addEventListener("click", handleFeedClick);
   elNotice.addEventListener("click", (ev) => {
     if (ev.target.closest('[data-action="retry"]')) reload();
   });
@@ -2707,6 +2775,19 @@ async function init() {
       if (ev.target.closest("[data-close]")) dlgVersion.close();
     });
     checkForNewVersion();
+  }
+
+  // "Mehr"-Menü (ideen-backlog.md #17): Archiv/Papierkorb wechseln nur die
+  // Ansicht, "Version" hat oben schon einen eigenen Listener (elVersionBtn
+  // zeigt seit dem Umbau auf denselben Button hier im Dialog) — der
+  // schließt hier nur noch das Menü mit, öffnet aber nicht selbst was.
+  if (elMoreBtn && dlgMore) {
+    elMoreBtn.addEventListener("click", () => dlgMore.showModal());
+    dlgMore.addEventListener("click", (ev) => {
+      const item = ev.target.closest(".more-item[data-view]");
+      if (item) { view = item.dataset.view; render(); }
+      if (ev.target.closest("[data-close]")) dlgMore.close();
+    });
   }
 
   render();

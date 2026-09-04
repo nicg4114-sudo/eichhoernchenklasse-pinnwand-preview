@@ -81,8 +81,6 @@
      bisherige Design rauskommt und es zu kleinen Bildschirmen hin gleich-
      mäßig kompakter wird. Jeweils erste Zeile ist der Fallback für
      Browser ohne dvh-Unterstützung (dann gilt der feste alte Wert). */
-  --dash-bubbles-h: 78px;
-  --dash-bubbles-h: clamp(64px, calc(31px + 5.4dvh), 78px);
   --dash-scale: 1;
   --dash-scale: clamp(.6, calc(.6 + (100dvh - 600px) / 260px * .4), 1);
   --dash-gap: 16px;
@@ -147,9 +145,15 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
   letter-spacing: -.02em;
 }
 
-/* Hält Titel und Push-Glocke als ein Grüppchen zusammen, statt dass die
-   Glocke von "justify-content: space-between" ganz an den Rand gezogen wird. */
 .brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+/* Plus-Button (nur Admins/Hauptlink) + Push-Glocke zusammen rechts in der
+   Kopfzeile (ideen-backlog.md #17 — vorher schwebend über der Fußleiste). */
+.brand-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -206,9 +210,11 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
 .push-bell:hover { color: var(--ink); }
 .push-bell.active { background: var(--accent); color: #fff; }
 
-/* Version-Tab in der Fußleiste — Punkt oben rechts am Icon, sobald es eine
-   ungesehene Neuerung gibt (siehe checkForNewVersion in app.js). */
-#versionBtn::after {
+/* "Mehr"-Tab in der Fußleiste — Punkt oben rechts am Icon, sobald es eine
+   ungesehene Versions-Neuerung gibt (siehe checkForNewVersion in app.js).
+   Der Versions-Button selbst steckt seit #17 im "Mehr"-Menü, der Punkt
+   muss deshalb auf dem sichtbaren "Mehr"-Knopf erscheinen. */
+#moreBtn::after {
   content: "";
   position: absolute;
   top: 2px;
@@ -220,7 +226,7 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
   border: 2px solid var(--card);
   display: none;
 }
-#versionBtn.has-update::after { display: block; }
+#moreBtn.has-update::after { display: block; }
 
 /* ---------- Hauptbereich ---------- */
 
@@ -230,12 +236,6 @@ main {
   padding: 20px 14px calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 24px);
 }
 
-/* Nur auf der Startseite: die schwebenden Bubbles brauchen zusätzlich
-   Platz, damit die letzte Karte beim Runterscrollen nicht darunter
-   verschwindet (siehe .dash-bubbles-float und has-dash-bubbles in app.js). */
-main.has-dash-bubbles {
-  padding-bottom: calc(var(--bottom-nav-h) + var(--dash-bubbles-h) + env(safe-area-inset-bottom) + 24px);
-}
 
 .notice {
   background: #fff8e9;
@@ -320,13 +320,39 @@ main.has-dash-bubbles {
 
 /* ---------- Start-Dashboard ---------- */
 
-/* Begrüßungsblock ganz oben, siehe renderWillkommen. */
+/* Begrüßungsblock ganz oben, siehe renderWillkommen. Titel ist zugleich
+   der Auf-/Zuklapp-Knopf (siehe ideen-backlog.md #14) — Unterzeile und
+   Elternabend-Hinweis lassen sich ausblenden, um Platz zu sparen; der
+   Zustand wird pro Gerät gemerkt. */
 .willkommen {
   padding: 0 2px var(--dash-gap);
   border-bottom: 1px solid var(--line);
   margin-bottom: var(--dash-gap);
 }
-.willkommen-title { font-size: 1.05rem; font-weight: 800; color: var(--ink); line-height: 1.35; }
+.willkommen-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.willkommen-title { font-size: 1.05rem; font-weight: 800; color: var(--ink); line-height: 1.35; flex: 1; }
+.willkommen-chevron { display: flex; flex: 0 0 auto; color: var(--muted); }
+.willkommen-chevron svg { width: 16px; height: 16px; transform: rotate(90deg); transition: transform .2s ease; }
+.willkommen.collapsed .willkommen-chevron svg { transform: rotate(0deg); }
+.willkommen-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows .2s ease;
+}
+.willkommen-body-inner { overflow: hidden; min-height: 0; }
+.willkommen.collapsed .willkommen-body { grid-template-rows: 0fr; }
 .willkommen-sub { font-size: .82rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
 .willkommen-elternabend {
   display: flex;
@@ -358,13 +384,21 @@ main.has-dash-bubbles {
 .dash-section-label svg { width: 13px; height: 13px; }
 
 /* Hinweis-Karussell: eine Karte je Bildschirmbreite, per Scroll-Snap
-   wischbar, Punkte darunter zeigen Position/Anzahl. Bewusst als
-   angepinnter Zettel gestaltet (Papierton, gestrichelter Rand, kleine
-   Pinnnadel oben, leichte Drehung) — deutlich abgesetzt von den weißen
-   Karten darunter (Termin/Aufgaben), damit auf einen Blick klar ist:
-   das hier ist der eine dauerhafte Aushang, der Rest ist der normale Feed. */
+   wischbar, Punkte/Pfeile/Zähler darunter bzw. daneben zeigen Position und
+   erlauben den Wechsel auch ohne Wisch-Geste (#6 aus ideen-backlog.md).
+   Bewusst als angepinnter Zettel gestaltet (Papierton, gestrichelter
+   Rand, kleine Pinnnadel oben) — deutlich abgesetzt von den weißen Karten
+   darunter (Termin/Aufgaben), damit auf einen Blick klar ist: das hier
+   ist der eine dauerhafte Aushang, der Rest ist der normale Feed. */
+.hinweis-carousel-wrap { position: relative; }
 .hinweis-carousel {
   display: flex;
+  /* Standard wäre align-items:stretch — würde alle Slides auf die Höhe
+     der größten strecken. Da immer nur eine Slide sichtbar ist (100%
+     Breite, Scroll-Snap), macht das nichts sichtbar anders, verhindert
+     aber, dass eine aufgeklappte Karte (siehe .expanded) von der
+     Stretch-Höhe der übrigen, eingeklappten Karten begrenzt bleibt. */
+  align-items: flex-start;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   gap: 0;
@@ -384,7 +418,6 @@ main.has-dash-bubbles {
   background: #f3e4c8;
   border-radius: var(--radius-sm);
   box-shadow: 0 4px 10px -4px rgba(38, 28, 12, .18);
-  transform: rotate(-.6deg);
 }
 /* Eigener, fließender Innenabstand statt der geerbten .card-Fixwerte
    (16/18/14px) — schrumpft auf niedrigen Bildschirmen mit, Maximalwert
@@ -393,6 +426,50 @@ main.has-dash-bubbles {
 .hinweis-slide > .card {
   padding: calc(var(--dash-scale) * 16px) calc(var(--dash-scale) * 18px) calc(var(--dash-scale) * 14px);
 }
+/* Feste Höchsthöhe, damit ein langer Hinweistext nicht die ganze Kachel-
+   Reihe verschiebt (#2 aus ideen-backlog.md) — überlaufender Text blendet
+   nach unten aus, "Mehr anzeigen" (siehe wireHinweisCarousel) klappt bei
+   Bedarf auf volle Höhe auf. */
+.hinweis-slide > .card {
+  max-height: 220px;
+  overflow: hidden;
+  transition: max-height .25s ease;
+}
+/* height:100% aus der Basisregel oben (füllt die Slide-Höhe, damit alle
+   Karten gleich hoch sind) würde sonst die max-height-Anhebung wieder
+   zunichtemachen — deshalb hier zusätzlich auf auto zurücksetzen. */
+.hinweis-slide > .card.expanded { max-height: 2000px; height: auto; }
+.hinweis-slide > .card::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34px;
+  background: linear-gradient(to bottom, rgba(243, 228, 200, 0), #f3e4c8 80%);
+  pointer-events: none;
+}
+.hinweis-slide > .card.expanded::after { display: none; }
+/* Absolut positioniert und über den Fade gelegt (::after oben) — als
+   normales Flusskind würde der Knopf hinter dem überlaufenden Text landen
+   und von overflow:hidden mit verschluckt, solange die Karte eingeklappt
+   ist. */
+.hinweis-expand-btn {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  z-index: 1;
+  border: none;
+  background: none;
+  color: var(--accent-dk);
+  font-weight: 700;
+  font-size: .78rem;
+  text-align: center;
+  cursor: pointer;
+  padding: 4px;
+}
+.hinweis-slide > .card.expanded .hinweis-expand-btn { position: static; margin-top: 6px; }
 /* Die Ersteller-/Zeitzeile wird hier schnell zwei- bis dreizeilig und
    frisst unnötig Höhe — im Karussell auf eine Zeile mit "…" kürzen statt
    ganz zu verstecken (voller Text bleibt sichtbar, sobald die Karte
@@ -422,36 +499,88 @@ main.has-dash-bubbles {
   background: var(--accent-dk);
   box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
 }
+/* Sichtbarer "1/2"-Zähler statt nur der kleinen Punkte, plus Pfeile für
+   den Wechsel per Klick (Desktop ohne Trackpad). */
+.hinweis-counter {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(38, 28, 12, .55);
+  color: #fff;
+  font-size: .68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+.hinweis-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, .85);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.hinweis-arrow svg { width: 16px; height: 16px; }
+.hinweis-arrow.prev { left: 6px; }
+.hinweis-arrow.prev svg { transform: scaleX(-1); }
+.hinweis-arrow.next { right: 6px; }
 .hinweis-dots {
   display: flex;
   justify-content: center;
   gap: 5px;
   margin: 8px 0 4px;
 }
+/* Klickfläche größer als die sichtbare Punktgröße (Touch-Ziel), sichtbarer
+   Punkt sitzt als kleines ::before mittig darin. */
 .hinweis-dot {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+.hinweis-dot::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--line-strong);
 }
-.hinweis-dot.active { background: var(--accent); }
+.hinweis-dot.active::before { background: var(--accent); }
 
-/* Zwei schlanke Kacheln nebeneinander: Nächster Termin + Aufgaben (nur
-   Anzahl, erledigt wird direkt auf der jeweiligen Karte markiert, siehe
-   card-aufgabe weiter unten) — siehe renderTerminAufgabenRow. Spart
-   deutlich Höhe gegenüber zwei gestapelten Vollbreite-Abschnitten. Ohne
-   anstehenden Termin nimmt die Aufgaben-Kachel die volle Breite ein
-   (.dash-tile-row.single), statt eine leere Hälfte zu zeigen. */
+/* Schlanke Kacheln nebeneinander: Nächster Termin, Aufgaben und aktive
+   Umfragen (nur Anzahl, erledigt/abgestimmt wird direkt auf der
+   jeweiligen Karte markiert, siehe card-aufgabe weiter unten) — "Was
+   steht an", siehe renderTerminAufgabenRow. Spart deutlich Höhe gegenüber
+   gestapelten Vollbreite-Abschnitten. Anzahl Spalten richtet sich nach
+   der tatsächlichen Kachel-Zahl (.count-1/2/3), statt leere Plätze zu
+   zeigen. */
 .dash-tile-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: var(--dash-gap);
 }
-.dash-tile-row.single { grid-template-columns: 1fr; }
+.dash-tile-row.count-1 { grid-template-columns: 1fr; }
+.dash-tile-row.count-2 { grid-template-columns: 1fr 1fr; }
+.dash-tile-row.count-3 { grid-template-columns: 1fr 1fr 1fr; }
 .dash-tile {
   border-radius: var(--radius-sm);
-  padding: 11px 12px;
+  padding: 11px 10px;
   min-width: 0;
 }
 .dash-tile-termin {
@@ -495,6 +624,27 @@ main.has-dash-bubbles {
 .dash-tile-aufgaben.empty .dash-tile-aufgaben-label { color: var(--muted); }
 .dash-tile-aufgaben-count { font-size: .84rem; font-weight: 700; color: var(--ink); }
 
+.dash-tile-umfrage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  border: none;
+  background: var(--c-beteiligung);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.dash-tile-umfrage-label {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  opacity: .85;
+}
+.dash-tile-umfrage-count { font-size: .84rem; font-weight: 700; }
+
 /* Kleines "Aufgabe"-Kennzeichen auf einer normalen Karte, siehe renderCard. */
 .card-aufgabe {
   display: flex;
@@ -510,59 +660,6 @@ main.has-dash-bubbles {
 .card-aufgabe svg { width: 14px; height: 14px; flex: 0 0 auto; }
 .card-aufgabe.done { color: var(--ok); }
 .card-aufgabe .btn { margin-left: auto; }
-
-/* Fest positionierter Bereich über der Fußleiste, technisch getrennt vom
-   scrollbaren Feed (#dashBubbles in index.html, gefüllt in render()). Bildet
-   zusammen mit .bottom-nav optisch eine zusammenhängende Zone — gleicher
-   Hintergrund, kein Rand dazwischen. pointer-events:none lässt Klicks/Scroll
-   in den Lücken zum Feed darunter durch, nur die Bubbles selbst sind aktiv. */
-.dash-bubbles-float {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
-  z-index: 25;
-  max-width: 720px;
-  margin: 0 auto;
-  background: var(--card);
-  pointer-events: none;
-}
-
-/* Innere Reihe der drei Bubbles — Zugang zu Termin/Beteiligung/Datei,
-   siehe renderBubbles. */
-.dash-bubbles {
-  display: flex;
-  justify-content: space-around;
-  padding: calc(var(--dash-scale) * 6px) 10px calc(var(--dash-scale) * 4px);
-  pointer-events: auto;
-}
-.dash-bubble {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  border: none;
-  background: none;
-  font: inherit;
-  cursor: pointer;
-  color: var(--muted);
-}
-.dash-bubble-icon {
-  position: relative;
-  width: clamp(42px, calc(23.5px + 3.08dvh), 50px);
-  height: clamp(42px, calc(23.5px + 3.08dvh), 50px);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  box-shadow: var(--shadow);
-}
-.dash-bubble-icon svg { width: 21px; height: 21px; }
-.dash-bubble-icon.type-termin      { background: var(--c-termin); }
-.dash-bubble-icon.type-beteiligung { background: var(--c-beteiligung); }
-.dash-bubble-icon.type-datei       { background: var(--c-datei); }
-.dash-bubble-label { font-size: .74rem; font-weight: 600; }
 
 /* ---------- Termin-Rubrik: Akkordeon-Streifen mit Zeitstrahl ---------- */
 
@@ -711,6 +808,22 @@ main.has-dash-bubbles {
 /* ---------- Karten ---------- */
 
 .feed { display: flex; flex-direction: column; gap: 14px; }
+/* Dezente Übergangsanimation bei echter Navigation (ideen-backlog.md #5,
+   siehe navDirection/syncHistory in app.js) — bewusst kurz und klein
+   gehalten, eine stille Aktualisierung ohne Navigation löst sie nicht aus. */
+@keyframes feedEnterForward {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes feedEnterBack {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.feed.nav-forward { animation: feedEnterForward .18s ease; }
+.feed.nav-back { animation: feedEnterBack .18s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .feed.nav-forward, .feed.nav-back { animation: none; }
+}
 
 .card {
   background: var(--card);
@@ -1208,41 +1321,32 @@ main.has-dash-bubbles {
 .bn-btn:hover { color: var(--ink); }
 .bn-btn.active { color: var(--accent); }
 
-.bn-gap { flex: 1 1 0; }
-
-/* Bleibt innerhalb der Fußleiste (kein Herausragen nach oben mehr) — die
-   Bubbles schweben jetzt als eigener fester Bereich direkt darüber
-   (.dash-bubbles-float, dessen Unterkante genau an der Fußleisten-Oberkante
-   endet), da würde jedes Herausragen des Buttons wieder hineinreichen. */
+/* Sitzt seit ideen-backlog.md #17 fest oben in der Kopfzeile neben der
+   Glocke (.brand-actions) statt über der Fußleiste zu schweben — kleiner
+   als vorher, da er sich jetzt keinen Platz mehr mit schwebenden Bubbles
+   teilen muss. */
 .fab {
-  position: absolute;
-  left: 50%;
-  top: 4px;
-  transform: translateX(-50%);
-  width: 50px;
-  height: 50px;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
   border-radius: 50%;
   border: none;
   background: var(--accent);
   color: #fff;
-  font-size: 1.8rem;
+  font-size: 1.3rem;
   line-height: 1;
   cursor: pointer;
-  box-shadow: 0 8px 22px -4px rgba(177, 85, 42, .55);
+  box-shadow: 0 4px 10px -3px rgba(177, 85, 42, .55);
   transition: transform .15s ease, background .15s ease;
 }
-.fab:hover { background: var(--accent-dk); transform: translateX(-50%) translateY(-2px); }
+.fab:hover { background: var(--accent-dk); transform: translateY(-1px); }
 
 /* Erscheint erst nach längerer Scroll-Distanz (siehe SCROLL_TOP_THRESHOLD
-   in app.js) und bringt bei Bedarf wieder nach oben. Der bottom-Wert
-   berücksichtigt bewusst auch --dash-bubbles-h, nicht nur die Fußleiste —
-   sonst läge der Button auf der Startseite über den schwebenden Bubbles
-   (siehe .dash-bubbles-float). Andere Ansichten haben keine Bubbles,
-   bekommen dadurch nur etwas mehr Abstand nach unten, was nicht stört. */
+   in app.js) und bringt bei Bedarf wieder nach oben. */
 .scroll-top-btn {
   position: fixed;
   left: 20px;
-  bottom: calc(var(--bottom-nav-h) + var(--dash-bubbles-h) + env(safe-area-inset-bottom) + 14px);
+  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 14px);
   width: 46px;
   height: 46px;
   border-radius: 50%;
@@ -1296,6 +1400,26 @@ main.has-dash-bubbles {
 .type-grid button:hover { border-color: var(--accent); background: var(--accent-bg); transform: translateY(-1px); }
 .type-grid b { display: block; margin-bottom: 2px; }
 .type-grid span { font-size: .82rem; color: var(--muted); }
+
+/* "Mehr"-Menü (#dlgMore, ideen-backlog.md #17): Archiv/Papierkorb/Version. */
+.more-list { display: flex; flex-direction: column; gap: 2px; }
+.more-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 12px 8px;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.more-item:hover { background: var(--bg); }
+.more-item svg { width: 20px; height: 20px; flex: 0 0 auto; color: var(--muted); }
 
 /* Versionshinweise (siehe #dlgVersion) — neueste zuerst, mit Datum. */
 .version-list { max-height: 60vh; overflow-y: auto; }
