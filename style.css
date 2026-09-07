@@ -418,7 +418,17 @@ main {
   font: inherit;
   color: inherit;
 }
-.willkommen-title { font-size: 1.05rem; font-weight: 800; color: var(--ink); line-height: 1.35; flex: 1; }
+.willkommen-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.35;
+  flex: 1;
+}
+.willkommen-title svg { width: 19px; height: 19px; flex: 0 0 auto; color: var(--accent); }
 .willkommen-chevron { display: flex; flex: 0 0 auto; color: var(--muted); }
 .willkommen-chevron svg { width: 16px; height: 16px; transform: rotate(90deg); transition: transform .2s ease; }
 .willkommen.collapsed .willkommen-chevron svg { transform: rotate(0deg); }
@@ -597,11 +607,17 @@ main {
 /* ideen-backlog.md #18: "top: 50%" bezog sich auf die ganze
    .hinweis-carousel-wrap, die mit einer aufgeklappten (.expanded) Karte
    mitwächst — die Pfeile rutschten dadurch in die Mitte des langen Texts
-   statt am Kartenrand zu bleiben. Fester Abstand von oben statt
-   vertikaler Zentrierung behebt das, unabhängig von der Kartenhöhe. */
+   statt am Kartenrand zu bleiben. Ein fester Abstand von oben lag aber
+   selbst bei kurzen Titeln noch mitten im Text. Jetzt sitzen die Pfeile
+   direkt auf dem oberen Kartenrand (halb innen, halb außen) — dort ist
+   nie Fließtext, unabhängig von Titel-/Textlänge.
+   Pfeile sind Geschwister von .hinweis-carousel (siehe
+   renderHinweisCarousel), "top: 0" bezieht sich also auf die obere Kante
+   der Karten. */
 .hinweis-arrow {
   position: absolute;
-  top: 38px;
+  top: 0;
+  transform: translateY(-50%);
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -616,9 +632,9 @@ main {
   z-index: 2;
 }
 .hinweis-arrow svg { width: 16px; height: 16px; }
-.hinweis-arrow.prev { left: 6px; }
+.hinweis-arrow.prev { left: 10px; }
 .hinweis-arrow.prev svg { transform: scaleX(-1); }
-.hinweis-arrow.next { right: 6px; }
+.hinweis-arrow.next { right: 10px; }
 .hinweis-dots {
   display: flex;
   justify-content: center;

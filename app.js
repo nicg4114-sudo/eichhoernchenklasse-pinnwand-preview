@@ -1091,52 +1091,42 @@ function renderStart(list) {
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const termine = list.filter((c) => c.type === "termin");
 
+  // Testweise (Nutzerwunsch 07.09.2026): Termin/Aufgaben/Kalender-Kacheln
+  // stehen jetzt vor dem Hinweis-Karussell statt danach, Begrüßung/
+  // Elternabend-Hinweis sind einem schmalen, aufklappbaren
+  // Stundenplan-Reiter gewichen (siehe renderStundenplanStrip()).
   return statsLineHtml(list)
-    + renderWillkommen(termine)
-    + renderHinweisCarousel(hinweise)
-    + renderTerminAufgabenRow(termine, list);
+    + renderStundenplanStrip()
+    + renderTerminAufgabenRow(termine, list)
+    + renderHinweisCarousel(hinweise);
 }
 
 // Begrüßungsblock ganz oben: Klassenname automatisch aus activeClassId
 // (gleiches Muster wie updateBrandTitle), bei "Beide Klassen" neutral wie
-// der Seitentitel. Die Elternabend-Zeile erkennt die App selbst — kein
-// eigenes Feld dafür, einfach der zeitlich nächste (noch nicht abgelaufene,
-// termine enthält dank visibleCards() ohnehin nur solche) Termin, dessen
-// Titel "Elternabend" enthält. Bewusst unabhängig von renderTerminAufgabenRow
-// darunter, das ja jeden beliebigen Termintyp zeigen kann.
-// Ein-/ausgeklappt-Zustand des Begrüßungsblocks, geräteseitig gemerkt
-// (siehe ideen-backlog.md #14) — Titel bleibt als Kopfzeile immer sichtbar,
-// nur Unterzeile/Elternabend-Hinweis klappen zu, um Platz zu sparen.
-const WILLKOMMEN_COLLAPSED_KEY = "pinnwand_willkommen_eingeklappt";
-
+// der Seitentitel.
 function ortsname() {
   const cls = classesList.find((c) => c.id === activeClassId);
   return cls ? (CLASS_GREETING_NAME[cls.slug] || `${cls.name}-Pinnwand`) : "Klassen-Pinnwand";
 }
 
-function renderWillkommen(termine) {
-  const ortsnameText = ortsname();
+// Testweise (Nutzerwunsch 07.09.2026): Begrüßungstext und Elternabend-
+// Hinweis sind auf der Startseite weg (Termin steht ohnehin schon in der
+// "Nächster Termin"-Kachel darunter) — stattdessen ein schmaler Reiter,
+// der den Stundenplan direkt auf der Startseite aufklappt, ohne extra
+// Navigation. Ein-/ausgeklappt-Zustand geräteseitig gemerkt wie zuvor bei
+// #14 (dort war es der ganze Begrüßungsblock, jetzt nur der Stundenplan).
+const STUNDENPLAN_STRIP_KEY = "pinnwand_stundenplan_reiter_offen";
 
-  const elternabend = termine
-    .filter((c) => c.title.toLowerCase().includes("elternabend"))
-    .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))[0];
-  const d = elternabend ? parseISODate(elternabend.event_date) : null;
-  const elternabendHtml = d ? `
-    <div class="willkommen-elternabend">
-      ${ICONS.termin}
-      Unser nächster Elternabend findet am ${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} statt.
-    </div>` : "";
-
-  const collapsed = localStorage.getItem(WILLKOMMEN_COLLAPSED_KEY) === "1";
+function renderStundenplanStrip() {
+  const open = localStorage.getItem(STUNDENPLAN_STRIP_KEY) === "1";
   return `
-    <div class="willkommen ${collapsed ? "collapsed" : ""}">
+    <div class="willkommen ${open ? "" : "collapsed"}">
       <button type="button" class="willkommen-toggle" data-action="toggle-willkommen">
-        <span class="willkommen-title">Herzlich willkommen auf der ${esc(ortsnameText)}</span>
+        <span class="willkommen-title">${ICONS.kalender}Stundenplan</span>
         <span class="willkommen-chevron">${ICONS.chevron}</span>
       </button>
       <div class="willkommen-body"><div class="willkommen-body-inner">
-        <div class="willkommen-sub">Hier findest du alles Organisatorische rund um die Klasse.</div>
-        ${elternabendHtml}
+        ${renderStundenplanTable()}
       </div></div>
     </div>`;
 }
@@ -1594,15 +1584,12 @@ function wireKalender() {
 // weiterhin über die Verwaltung (renderKalAdminSchedule), hier nur ein
 // Sprungbrett dahin für den Hauptlink.
 
-function renderStundenplanView() {
-  const head = classLocked ? "" : `
-    <div class="dateien-head">
-      <span class="spacer"></span>
-      <button class="btn small ghost" data-action="edit-stundenplan">Bearbeiten</button>
-    </div>`;
-
+// Gemeinsam von renderStundenplanView() und dem Stundenplan-Reiter auf der
+// Startseite (renderStundenplanStrip()) genutzt — reine Lese-Tabelle ohne
+// Kopfzeile/Bearbeiten-Button, die je nach Aufrufer selbst ergänzt werden.
+function renderStundenplanTable() {
   if (!activeClassId) {
-    return head + `<p class="rubrik-panel-empty">Bitte oben eine Klasse wählen, um den Stundenplan zu sehen.</p>`;
+    return `<p class="rubrik-panel-empty">Bitte oben eine Klasse wählen, um den Stundenplan zu sehen.</p>`;
   }
 
   const byPeriod = new Map();
@@ -1613,7 +1600,7 @@ function renderStundenplanView() {
   const periods = [...byPeriod.keys()].sort((a, b) => a - b);
 
   if (!periods.length) {
-    return head + `<p class="rubrik-panel-empty">Für diese Klasse ist noch kein Stundenplan hinterlegt.</p>`;
+    return `<p class="rubrik-panel-empty">Für diese Klasse ist noch kein Stundenplan hinterlegt.</p>`;
   }
 
   const rows = periods.map((p) => {
@@ -1626,13 +1613,22 @@ function renderStundenplanView() {
       </tr>`;
   }).join("");
 
-  return head + `
+  return `
     <div class="table-scroll">
       <table class="sched-table stundenplan-table">
         <thead><tr><th></th>${WEEKDAY_SHORT.slice(1, 6).map((w) => `<th>${w}</th>`).join("")}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+}
+
+function renderStundenplanView() {
+  const head = classLocked ? "" : `
+    <div class="dateien-head">
+      <span class="spacer"></span>
+      <button class="btn small ghost" data-action="edit-stundenplan">Bearbeiten</button>
+    </div>`;
+  return head + renderStundenplanTable();
 }
 
 /* ---------- Verwaltung: Stundenplan/Ereignisse/Ferien (nur Hauptlink) --- */
@@ -3105,8 +3101,8 @@ async function handleFeedClick(ev) {
       break;
     }
     case "toggle-willkommen": {
-      const now = localStorage.getItem(WILLKOMMEN_COLLAPSED_KEY) === "1";
-      localStorage.setItem(WILLKOMMEN_COLLAPSED_KEY, now ? "0" : "1");
+      const now = localStorage.getItem(STUNDENPLAN_STRIP_KEY) === "1";
+      localStorage.setItem(STUNDENPLAN_STRIP_KEY, now ? "0" : "1");
       render();
       break;
     }
@@ -3548,6 +3544,9 @@ async function init() {
       if (!btn) return;
       dlgSearch.close();
       openCardById(btn.dataset.card);
+    });
+    dlgSearch.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-close]")) dlgSearch.close();
     });
   }
 
