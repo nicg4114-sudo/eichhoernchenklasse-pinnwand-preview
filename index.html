@@ -24,6 +24,9 @@
     <div class="brand-row">
       <h1 id="brandTitle">🐿️ Eichhörnchenklasse</h1>
       <div class="brand-actions">
+        <button id="searchBtn" class="icon-btn-round" type="button" title="Suchen" aria-label="Suchen">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8.7" cy="8.7" r="5.7"/><line x1="16.5" y1="16.5" x2="12.8" y2="12.8"/></svg>
+        </button>
         <button id="fab" class="fab" title="Neuen Eintrag erstellen" aria-label="Neuen Eintrag erstellen">+</button>
         <button id="pushBell" class="push-bell" type="button" title="Benachrichtigungen aktivieren" aria-label="Benachrichtigungen aktivieren" hidden></button>
       </div>
@@ -164,6 +167,32 @@
   </div>
   <div class="dlg-actions">
     <button type="button" class="btn ghost" data-close>Schließen</button>
+  </div>
+</dialog>
+
+<!-- Suche (ideen-backlog.md #24): durchsucht Titel/Text aller sichtbaren
+     Karten, Ergebnisse nach Rubrik gruppiert, Inhalt kommt von app.js
+     (renderSearchResults). -->
+<dialog id="dlgSearch" class="dlg">
+  <h2>Suchen</h2>
+  <input type="search" id="searchInput" class="search-input" placeholder="Stichwort eingeben…" autocomplete="off">
+  <div id="searchResults" class="search-results"></div>
+  <div class="dlg-actions">
+    <button type="button" class="btn ghost" data-close>Schließen</button>
+  </div>
+</dialog>
+
+<!-- Täglicher Willkommens-Splashscreen (ideen-backlog.md #21) —
+     unabhängig vom ein-/ausklappbaren Begrüßungsblock (#14). -->
+<dialog id="dlgSplash" class="dlg small">
+  <h2 id="splashTitle">Herzlich willkommen</h2>
+  <p>Schön, dass du vorbeischaust — hier findest du alles Organisatorische rund um die Klasse.</p>
+  <label class="field-checkbox">
+    <input type="checkbox" id="splashHideCheckbox">
+    <span>Nicht mehr anzeigen</span>
+  </label>
+  <div class="dlg-actions">
+    <button type="button" class="btn primary" data-close>Los geht's</button>
   </div>
 </dialog>
 

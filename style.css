@@ -72,7 +72,7 @@
      eigene Farbe, damit sie nicht wie eine der drei Einzelfarben wirkt. */
   --c-beteiligung: #7c5980;
   --line-strong: #d8cbb0;
-  --bottom-nav-h: 60px;
+  --bottom-nav-h: 68px; /* ideen-backlog.md #28: etwas größer als zuvor (60px) */
   /* Fließende Dashboard-Skalierung nach Bildschirmhöhe (dvh): zwischen
      600px (kleine Handys, z. B. iPhone SE) und 860px (große Handys)
      wandert --dash-scale linear von 0.6 auf 1 — darunter/darüber bleibt
@@ -219,6 +219,72 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
 .push-bell svg { width: 17px; height: 17px; }
 .push-bell:hover { color: var(--ink); }
 .push-bell.active { background: var(--accent); color: #fff; }
+
+/* ideen-backlog.md #24: Such-Icon, gleiches Grundmuster wie .push-bell. */
+.icon-btn-round {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.icon-btn-round svg { width: 17px; height: 17px; }
+.icon-btn-round:hover { color: var(--ink); background: var(--line-soft); }
+
+.search-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: .95rem;
+  margin: 10px 0 4px;
+}
+.search-input:focus { outline: none; border-color: var(--accent); }
+.search-results { max-height: 60vh; overflow-y: auto; }
+.search-group { margin-top: 14px; }
+.search-group-label {
+  font-size: .74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  margin: 0 2px 6px;
+}
+.search-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--line-soft);
+  background: none;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  padding: 9px 4px;
+}
+.search-result:hover { background: var(--bg); }
+.search-result-title { font-weight: 600; }
+.search-result-snippet { font-size: .82rem; color: var(--muted); }
+
+/* ideen-backlog.md #21: Checkbox-Zeile im Splashscreen. */
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+  font-size: .9rem;
+  cursor: pointer;
+}
+.field-checkbox input { width: 17px; height: 17px; }
 
 /* "Mehr"-Tab in der Fußleiste — Punkt oben rechts am Icon, sobald es eine
    ungesehene Versions-Neuerung gibt (siehe checkForNewVersion in app.js).
@@ -683,7 +749,16 @@ main {
   font: inherit;
 }
 .dash-tile-kalender svg { width: 20px; height: 20px; flex: 0 0 auto; }
-.dash-tile-kalender-label { font-size: .84rem; font-weight: 700; }
+/* ideen-backlog.md #27: Ohne min-width:0 konnte der Flex-Text nicht unter
+   seine intrinsische Breite schrumpfen — "Stundenplan" (ein zusammen-
+   hängendes Wort ohne Umbruchstelle) lief dadurch auf schmalen
+   Bildschirmen aus der Kachel heraus statt umzubrechen. */
+.dash-tile-kalender-label {
+  font-size: .84rem;
+  font-weight: 700;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
 
 /* Kleines "Aufgabe"-Kennzeichen auf einer normalen Karte, siehe renderCard. */
 .card-aufgabe {
@@ -1503,10 +1578,30 @@ main {
   cursor: pointer;
   transition: color .15s ease;
 }
-.bn-btn svg { width: 20px; height: 20px; }
-.bn-label { font-size: .66rem; font-weight: 600; }
+.bn-btn svg { width: 22px; height: 22px; }
+.bn-label { font-size: .68rem; font-weight: 600; }
 .bn-btn:hover { color: var(--ink); }
 .bn-btn.active { color: var(--accent); }
+
+/* ideen-backlog.md #28: Fußleiste etwas größer, Icons je Rubrik in deren
+   Akzentfarbe statt einheitlich grau, "Start" etwas größer/prominenter
+   als die übrigen Einträge. Farben lehnen sich an die schon vorhandenen
+   Typ-Akzentfarben an (--c-termin/--c-beteiligung/--c-datei) — "Mehr" hat
+   keine eigene Kartenfarbe und bleibt bewusst neutral. */
+.bn-btn[data-view="termine"] { color: var(--c-termin); }
+.bn-btn[data-view="beteiligung"] { color: var(--c-beteiligung); }
+.bn-btn[data-view="dateien"] { color: var(--c-datei); }
+.bn-btn[data-view="termine"].active,
+.bn-btn[data-view="beteiligung"].active,
+.bn-btn[data-view="dateien"].active { opacity: 1; }
+.bn-btn[data-view="termine"],
+.bn-btn[data-view="beteiligung"],
+.bn-btn[data-view="dateien"] { opacity: .8; }
+.bn-btn[data-view="termine"]:hover,
+.bn-btn[data-view="beteiligung"]:hover,
+.bn-btn[data-view="dateien"]:hover { opacity: 1; }
+.bn-btn[data-view="feed"] svg { width: 24px; height: 24px; }
+.bn-btn[data-view="feed"] .bn-label { font-size: .72rem; font-weight: 800; }
 
 /* Sitzt seit ideen-backlog.md #17 fest oben in der Kopfzeile neben der
    Glocke (.brand-actions) statt über der Fußleiste zu schweben — kleiner

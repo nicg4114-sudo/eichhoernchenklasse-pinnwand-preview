@@ -240,6 +240,11 @@ const elMoreBtn = $("moreBtn");
 const dlgKalenderAdmin = $("dlgKalenderAdmin");
 const elKalAdminBody = $("kalAdminBody");
 const dlgKalenderMenu = $("dlgKalenderMenu");
+const dlgSearch = $("dlgSearch");
+const elSearchBtn = $("searchBtn");
+const elSearchInput = $("searchInput");
+const elSearchResults = $("searchResults");
+const dlgSplash = $("dlgSplash");
 
 /* ---------- Hilfsfunktionen ---------- */
 
@@ -460,7 +465,7 @@ function toast(msg, isError = false) {
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgKalenderMenu].some((d) => d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgKalenderMenu, dlgSearch, dlgSplash].some((d) => d.open);
 }
 
 /* ---------- API ---------- */
@@ -1007,13 +1012,14 @@ function linkedBackChipHtml(c) {
     ${ICONS.link}<span>verknüpft mit „${esc(parent.title)}“</span></button>`;
 }
 
-// Aufklappbarer Bereich mit den an einen Termin verknüpften Karten (z. B.
-// Liste/Umfrage/Hinweis zu einem Elternabend). Nur für Termine relevant.
+// Aufklappbarer Bereich mit den verknüpften Karten (z. B. Liste/Umfrage/
+// Hinweis zu einem Elternabend-Termin, oder eine Datei an einem Hinweis,
+// siehe ideen-backlog.md #10 — z. B. eine Packliste an einen Wandertag).
 // Verknüpfte Karten werden bewusst nur eine Ebene tief gerendert (siehe
 // Aufruf oben mit opts.nested), damit eine versehentliche Ringverknüpfung
-// (Termin A ↔ Termin B) nicht zu endloser Verschachtelung führt.
+// nicht zu endloser Verschachtelung führt.
 function renderLinkedSection(c, inTrash) {
-  if (c.type !== "termin" || inTrash) return "";
+  if (!["termin", "hinweis"].includes(c.type) || inTrash) return "";
   const linked = cards.filter((x) => x.parent_id === c.id && !x.trashed_at);
   const addBtn = classLocked ? "" :
     `<button type="button" class="btn small link" data-action="add-linked" data-card="${c.id}">+ Element hier verknüpfen</button>`;
@@ -1103,9 +1109,13 @@ function renderStart(list) {
 // nur Unterzeile/Elternabend-Hinweis klappen zu, um Platz zu sparen.
 const WILLKOMMEN_COLLAPSED_KEY = "pinnwand_willkommen_eingeklappt";
 
-function renderWillkommen(termine) {
+function ortsname() {
   const cls = classesList.find((c) => c.id === activeClassId);
-  const ortsname = cls ? (CLASS_GREETING_NAME[cls.slug] || `${cls.name}-Pinnwand`) : "Klassen-Pinnwand";
+  return cls ? (CLASS_GREETING_NAME[cls.slug] || `${cls.name}-Pinnwand`) : "Klassen-Pinnwand";
+}
+
+function renderWillkommen(termine) {
+  const ortsnameText = ortsname();
 
   const elternabend = termine
     .filter((c) => c.title.toLowerCase().includes("elternabend"))
@@ -1121,7 +1131,7 @@ function renderWillkommen(termine) {
   return `
     <div class="willkommen ${collapsed ? "collapsed" : ""}">
       <button type="button" class="willkommen-toggle" data-action="toggle-willkommen">
-        <span class="willkommen-title">Herzlich willkommen auf der ${esc(ortsname)}</span>
+        <span class="willkommen-title">Herzlich willkommen auf der ${esc(ortsnameText)}</span>
         <span class="willkommen-chevron">${ICONS.chevron}</span>
       </button>
       <div class="willkommen-body"><div class="willkommen-body-inner">
@@ -1129,6 +1139,22 @@ function renderWillkommen(termine) {
         ${elternabendHtml}
       </div></div>
     </div>`;
+}
+
+// ideen-backlog.md #21: Täglicher Willkommens-Splashscreen, zusätzlich zum
+// ein-/ausklappbaren Begrüßungsblock (#14) — bewusst getrennte Mechanik:
+// der Splash erscheint höchstens einmal pro Kalendertag und lässt sich
+// dauerhaft abschalten, das Einklappen bleibt unabhängig davon bestehen.
+const SPLASH_LAST_DAY_KEY = "pinnwand_splash_letzter_tag";
+const SPLASH_OFF_KEY = "pinnwand_splash_aus";
+
+function maybeShowSplash() {
+  if (!dlgSplash || localStorage.getItem(SPLASH_OFF_KEY) === "1") return;
+  const today = toISODate(new Date());
+  if (localStorage.getItem(SPLASH_LAST_DAY_KEY) === today) return;
+  localStorage.setItem(SPLASH_LAST_DAY_KEY, today);
+  $("splashTitle").textContent = `Herzlich willkommen auf der ${ortsname()}`;
+  dlgSplash.showModal();
 }
 
 // Wischbares Karussell: eine Hinweis-Karte je Bildschirmbreite, Punkte
@@ -1938,6 +1964,22 @@ function wireHinweisCarousel() {
     card.appendChild(btn);
   });
 
+  // ideen-backlog.md #29: .hinweis-carousel ist ein horizontal scrollender
+  // Flex-Container — overflow-x blendet nur den sichtbaren Ausschnitt aus,
+  // für die Höhe der Flex-Zeile zählen aber alle Karten mit, auch die
+  // weggescrollten. Blieb eine Karte .expanded, bestimmte sie weiterhin
+  // die Containerhöhe, obwohl eine kürzere Karte sichtbar war — Fußleiste
+  // "hing" mit Leerraum darüber. Fix: beim Wechsel der sichtbaren Karte
+  // jede andere, noch aufgeklappte Karte automatisch wieder einklappen.
+  const collapseOthers = (exceptSlide) => {
+    elFeed.querySelectorAll(".hinweis-slide > .card.expanded").forEach((card) => {
+      if (card.closest(".hinweis-slide") === exceptSlide) return;
+      card.classList.remove("expanded");
+      const btn = card.querySelector(".hinweis-expand-btn");
+      if (btn) btn.textContent = "Mehr anzeigen";
+    });
+  };
+
   let ticking = false;
   el.addEventListener("scroll", () => {
     if (ticking) return;
@@ -1946,6 +1988,7 @@ function wireHinweisCarousel() {
       const w = el.clientWidth || 1;
       hinweisCarouselIndex = Math.round(el.scrollLeft / w);
       updateIndicators();
+      collapseOthers(el.children[hinweisCarouselIndex]);
       ticking = false;
     });
   }, { passive: true });
@@ -2026,6 +2069,43 @@ function syncHistory() {
   return true;
 }
 
+// ideen-backlog.md #24: App-weite Suche. Durchsucht Titel und (von HTML
+// befreiten) Text aller sichtbaren Karten der aktuell gewählten Klasse,
+// gruppiert die Treffer nach Rubrik. Bewusst rein clientseitig — die
+// Kartenliste liegt (wie überall sonst in der App) schon vollständig im
+// Speicher, ein eigener Server-Endpunkt wäre hier unnötig.
+function stripTags(html) {
+  return String(html ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function renderSearchResults(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    elSearchResults.innerHTML = `<p class="rubrik-panel-empty">Stichwort eingeben, um Hinweise, Termine, Beteiligungen und Dateien zu durchsuchen.</p>`;
+    return;
+  }
+  const matches = visibleCards().filter((c) => !c.trashed_at &&
+    (c.title.toLowerCase().includes(q) || stripTags(c.body).toLowerCase().includes(q)));
+  if (!matches.length) {
+    elSearchResults.innerHTML = `<p class="rubrik-panel-empty">Keine Treffer für „${esc(query.trim())}".</p>`;
+    return;
+  }
+  const groups = new Map();
+  for (const c of matches) {
+    if (!groups.has(c.type)) groups.set(c.type, []);
+    groups.get(c.type).push(c);
+  }
+  elSearchResults.innerHTML = [...groups.entries()].map(([type, list]) => `
+    <div class="search-group">
+      <div class="search-group-label">${TYPE_LABELS[type]}</div>
+      ${list.map((c) => `
+        <button type="button" class="search-result" data-action="search-jump" data-card="${c.id}">
+          <span class="search-result-title">${esc(c.title)}</span>
+          ${c.body ? `<span class="search-result-snippet">${esc(stripTags(c.body)).slice(0, 90)}</span>` : ""}
+        </button>`).join("")}
+    </div>`).join("");
+}
+
 // Springt direkt zu einer Karte: bestimmt die passende Ansicht (inkl.
 // Papierkorb/Archiv, falls die Karte dort liegt), wechselt dahin und hebt
 // die Karte kurz hervor. Quelle für Push-Klick (service-worker.js) und den
@@ -2052,7 +2132,12 @@ function openCardById(id) {
   render();
   requestAnimationFrame(() => {
     if (c.type === "hinweis" && view === "feed") {
-      const hinweise = visibleCards().filter((x) => x.type === "hinweis");
+      // Muss dieselbe Reihenfolge wie renderStart() nutzen (neuster zuerst,
+      // unabhängig vom Pin-Status, siehe #25/Hinweis-Sortierung) — sonst
+      // landet der Sprung (Push-Klick, Teilen-Link, Suche) auf der falschen
+      // Karussell-Position.
+      const hinweise = visibleCards().filter((x) => x.type === "hinweis")
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
       const idx = hinweise.findIndex((x) => x.id === id);
       if (idx >= 0) { hinweisCarouselIndex = idx; wireHinweisCarousel(); }
     }
@@ -2903,27 +2988,25 @@ async function handleFeedClick(ev) {
       break;
     }
     case "add-linked": {
-      pendingParentId = cardId;   // cardId zeigt hier auf den Termin
-      dlgType.showModal();
+      // ideen-backlog.md #10: bei einem Hinweis als Ziel ist bewusst nur
+      // "Datei" erlaubt (z. B. eine Packliste an einen Wandertag-Hinweis
+      // hängen) — der Typ-Auswahldialog wird dafür übersprungen. Bei einem
+      // Termin bleibt die volle Auswahl wie bisher bestehen.
+      const parent = cardById(cardId);
+      if (parent && parent.type === "hinweis") {
+        openEditor("datei", null, cardId);
+      } else {
+        pendingParentId = cardId;
+        dlgType.showModal();
+      }
       break;
     }
     case "jump-to-card": {
-      // Kommt vom "zurück zum Termin"-Chip auf einer verknüpften Karte —
-      // Ziel ist immer ein Termin (siehe linkedBackChipHtml).
-      const target = cardById(cardId);
-      if (!target) break;
-      if (target.type === "termin") {
-        view = "termine";
-        openTerminId = target.id;
-        render();
-      }
-      requestAnimationFrame(() => {
-        const el = elFeed.querySelector(`.card[data-card="${CSS.escape(cardId)}"]`);
-        if (!el) return;
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.classList.add("flash");
-        setTimeout(() => el.classList.remove("flash"), 1600);
-      });
+      // Kommt vom "zurück zum Termin/Hinweis"-Chip auf einer verknüpften
+      // Karte (ideen-backlog.md #10 erweitert das Ziel von reinem Termin
+      // auch auf Hinweis) — openCardById() kennt beide Fälle bereits
+      // (Push-Klick, Teilen-Link, Suche nutzen dieselbe Funktion).
+      openCardById(cardId);
       break;
     }
     // Die drei Bubbles auf der Startseite (Termin/Beteiligung/Datei) sowie
@@ -3397,6 +3480,33 @@ async function init() {
     });
   }
 
+  // ideen-backlog.md #21: Splashscreen
+  if (dlgSplash) {
+    dlgSplash.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-close]")) {
+        if ($("splashHideCheckbox").checked) localStorage.setItem(SPLASH_OFF_KEY, "1");
+        dlgSplash.close();
+      }
+    });
+  }
+
+  // ideen-backlog.md #24: Suche
+  if (elSearchBtn && dlgSearch) {
+    elSearchBtn.addEventListener("click", () => {
+      elSearchInput.value = "";
+      renderSearchResults("");
+      dlgSearch.showModal();
+      elSearchInput.focus();
+    });
+    elSearchInput.addEventListener("input", () => renderSearchResults(elSearchInput.value));
+    elSearchResults.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-action='search-jump']");
+      if (!btn) return;
+      dlgSearch.close();
+      openCardById(btn.dataset.card);
+    });
+  }
+
   render();
 
   if (!configured) {
@@ -3409,6 +3519,7 @@ async function init() {
   }
 
   await loadClasses();
+  maybeShowSplash();
   reload();
 
   // Alle 60 s still aktualisieren (nur wenn sichtbar und kein Dialog offen)
