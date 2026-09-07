@@ -1711,15 +1711,24 @@ function renderKalAdminSchedule(classId) {
 
   elKalAdminBody.querySelector("[data-action='sched-save']").addEventListener("click", async () => {
     const slots = [];
+    // Bug (ideen-backlog.md #19): eine Zeile mit Fach, aber ohne Uhrzeit
+    // wurde bisher stillschweigend verworfen — "gespeichert" erschien
+    // trotzdem, die Zeile war beim nächsten Öffnen einfach weg. Jetzt wird
+    // das vor dem Speichern abgefangen und dem Nutzer angezeigt.
     for (const tr of elKalAdminBody.querySelectorAll("#schedRows tr")) {
       const period = Number(tr.dataset.period);
       const start = tr.querySelector("[data-role='start']").value.trim();
       const end = tr.querySelector("[data-role='end']").value.trim();
-      if (!start || !end) continue;
-      for (const inp of tr.querySelectorAll(".sched-subject")) {
-        const subject = inp.value.trim();
-        if (!subject) continue;
-        slots.push({ weekday: Number(inp.dataset.weekday), period, start_time: start, end_time: end, subject });
+      const rowSubjects = [...tr.querySelectorAll(".sched-subject")].filter((inp) => inp.value.trim());
+      if (!start || !end) {
+        if (rowSubjects.length) {
+          toast("Bei einer Zeile mit Fach fehlt die Uhrzeit (von/bis) — bitte ergänzen, sonst geht die Zeile beim Speichern verloren.", true);
+          return;
+        }
+        continue;
+      }
+      for (const inp of rowSubjects) {
+        slots.push({ weekday: Number(inp.dataset.weekday), period, start_time: start, end_time: end, subject: inp.value.trim() });
       }
     }
     try {
