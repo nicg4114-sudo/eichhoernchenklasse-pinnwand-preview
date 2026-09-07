@@ -952,14 +952,16 @@ function renderCard(c, opts) {
           <div class="menu-list">${menu}</div>
         </details>`}
       </div>
-      <h3>${esc(c.title)}</h3>
-      ${c.parent_id ? linkedBackChipHtml(c) : ""}
-      ${trashNote}
-      ${body}
-      <div class="card-meta">Erstellt am ${fmtTimestamp(c.created_at)}${creatorNote}${endNote}</div>
-      ${editedNote}
-      ${aufgabeBlockHtml(c)}
-      ${shareButtonHtml(c)}
+      <div class="card-clip">
+        <h3>${esc(c.title)}</h3>
+        ${c.parent_id ? linkedBackChipHtml(c) : ""}
+        ${trashNote}
+        ${body}
+        <div class="card-meta">Erstellt am ${fmtTimestamp(c.created_at)}${creatorNote}${endNote}</div>
+        ${editedNote}
+        ${aufgabeBlockHtml(c)}
+        ${shareButtonHtml(c)}
+      </div>
     </article>`;
 }
 
@@ -1220,11 +1222,11 @@ const TERMIN_ZEITSTRAHL = [
   { label: "Später", max: Infinity },
 ];
 
+// ideen-backlog.md #23: eigener "Start"-Zurück-Knopf hier entfernt — die
+// untere Navigation hat mit "Start" bereits einen immer erreichbaren,
+// klar erkennbaren Weg zurück, ein zweiter Knopf oben war nur Platzverbrauch.
 function renderTermineView(termine) {
-  const head = `
-    <div class="dateien-head">
-      <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
-    </div>`;
+  const head = "";
   if (!termine.length) {
     return head + `<p class="rubrik-panel-empty">Noch keine Termine.</p>`;
   }
@@ -1294,10 +1296,7 @@ function renderArchivStrip(c) {
 /* ---------- Beteiligung-Rubrik (Umfrage/Liste/Tabelle) ---------- */
 
 function renderBeteiligungView(items) {
-  const head = `
-    <div class="dateien-head">
-      <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
-    </div>`;
+  const head = "";
   return head + `<div class="group-body">${items.length
     ? items.map(renderCard).join("")
     : `<p class="rubrik-panel-empty">Noch keine Beteiligung.</p>`}</div>`;
@@ -1306,10 +1305,7 @@ function renderBeteiligungView(items) {
 /* ---------- Aufgaben-Übersicht (Klick auf die Aufgaben-Kachel) ---------- */
 
 function renderAufgabenView(items) {
-  const head = `
-    <div class="dateien-head">
-      <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
-    </div>`;
+  const head = "";
   if (!items.length) {
     return head + `<p class="rubrik-panel-empty">Aktuell keine als Aufgabe markierten Einträge.</p>`;
   }
@@ -1381,7 +1377,7 @@ function renderFolderView(dateiCards) {
           <span class="folder-tile-icon">+</span>
           <span class="folder-tile-label">Neuer Ordner</span>
         </button>`);
-    return backHead("Start", "dateien-back") + `<div class="folder-grid">${tiles}</div>`;
+    return `<div class="folder-grid">${tiles}</div>`;
   }
 
   const items = dateiCards.filter((c) => (c.folder_id || "") === openFolderId);
@@ -1535,11 +1531,10 @@ function renderKalenderDay() {
 }
 
 function renderKalenderView() {
-  const head = `
+  const head = classLocked ? "" : `
     <div class="dateien-head">
-      <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
       <span class="spacer"></span>
-      ${classLocked ? "" : `<button class="btn small ghost" data-action="open-kalender-admin">Verwalten</button>`}
+      <button class="btn small ghost" data-action="open-kalender-admin">Verwalten</button>
     </div>`;
   return head + `<div class="cal-wrap">${renderKalenderMonth()}</div>${renderKalenderDay()}`;
 }
@@ -1566,11 +1561,10 @@ function wireKalender() {
 // Sprungbrett dahin für den Hauptlink.
 
 function renderStundenplanView() {
-  const head = `
+  const head = classLocked ? "" : `
     <div class="dateien-head">
-      <button class="btn ghost back-btn" data-action="start-back">${ICONS.arrowLeft}Start</button>
       <span class="spacer"></span>
-      ${classLocked ? "" : `<button class="btn small ghost" data-action="edit-stundenplan">Bearbeiten</button>`}
+      <button class="btn small ghost" data-action="edit-stundenplan">Bearbeiten</button>
     </div>`;
 
   if (!activeClassId) {
@@ -1917,7 +1911,11 @@ function wireHinweisCarousel() {
   // ohne unnötigen Knopf bleiben.
   elFeed.querySelectorAll(".hinweis-slide > .card").forEach((card) => {
     if (card.classList.contains("expanded") || card.querySelector(".hinweis-expand-btn")) return;
-    if (card.scrollHeight <= card.clientHeight + 2) return;
+    // Gemessen wird der geklippte Inhalt (.card-clip), nicht mehr die
+    // ganze Karte — das "..."-Menü im card-top hat keine feste Höhe mehr
+    // und darf die Messung nicht verfälschen (siehe #20).
+    const clip = card.querySelector(".card-clip");
+    if (clip.scrollHeight <= clip.clientHeight + 2) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "hinweis-expand-btn";
@@ -2945,11 +2943,6 @@ async function handleFeedClick(ev) {
       render();
       break;
     }
-    case "start-back": {
-      view = "feed";
-      render();
-      break;
-    }
     case "open-card": {
       openCardById(btn.dataset.card);
       break;
@@ -2974,11 +2967,6 @@ async function handleFeedClick(ev) {
     }
     case "aufgabe-done": {
       setAufgabeErledigt(btn.dataset.card, true);
-      render();
-      break;
-    }
-    case "dateien-back": {
-      view = "feed";
       render();
       break;
     }
@@ -3278,6 +3266,11 @@ async function init() {
     const btn = ev.target.closest("[data-view]");
     if (!btn) return;
     view = btn.dataset.view;
+    // ideen-backlog.md #23: "Datei" soll immer zur Hauptansicht der
+    // Ordner springen, nicht in einem zuvor offenen Unterordner
+    // "hängenbleiben" — dafür sind ja gerade die On-Screen-Zurück-Knöpfe
+    // dort weggefallen.
+    if (view === "dateien") openFolderId = undefined;
     render();
   });
 

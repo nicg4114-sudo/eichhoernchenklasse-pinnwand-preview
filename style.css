@@ -102,6 +102,15 @@
 
 html { -webkit-text-size-adjust: 100%; }
 
+/* ideen-backlog.md #26: Ein einzelnes zu breites Element (z. B. langes Wort
+   ohne Umbruch) konnte bisher die ganze Seite horizontal aufziehen — dann
+   ließ sich die App auf dem Handy seitlich verschieben, und die per
+   "position: fixed" gedachte Fußleiste wanderte mit, weil sich "fixed" auf
+   den (dann zu breiten) Viewport bezieht. html/body als Absicherung auf die
+   Bildschirmbreite begrenzt, zusätzlich lange Wörter global umbrechbar
+   gemacht statt die Breite zu sprengen. */
+html, body { overflow-x: hidden; max-width: 100%; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -110,6 +119,7 @@ body {
   color: var(--ink);
   font: 16px/1.55 "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
 }
 
 button { font: inherit; color: inherit; }
@@ -429,16 +439,21 @@ main {
 /* Feste Höchsthöhe, damit ein langer Hinweistext nicht die ganze Kachel-
    Reihe verschiebt (#2 aus ideen-backlog.md) — überlaufender Text blendet
    nach unten aus, "Mehr anzeigen" (siehe wireHinweisCarousel) klappt bei
-   Bedarf auf volle Höhe auf. */
-.hinweis-slide > .card {
+   Bedarf auf volle Höhe auf.
+   Wichtig (ideen-backlog.md #20): NUR der Inhalt (.card-clip) wird
+   geklippt, nicht die ganze .card — sonst landet das "..."-Aktionsmenü
+   (im .card-top, außerhalb von .card-clip) in einem overflow:hidden-
+   Container und dessen Dropdown wird beim Öffnen unsichtbar abgeschnitten.
+   Für Admins sah es dadurch so aus, als gäbe es bei Hinweisen keine
+   Bearbeiten-Option mehr — die Karten außerhalb des Karussells (andere
+   Rubriken) waren nie betroffen, da nur hier geklippt wird. */
+.hinweis-slide > .card .card-clip {
   max-height: 220px;
   overflow: hidden;
   transition: max-height .25s ease;
+  position: relative;
 }
-/* height:100% aus der Basisregel oben (füllt die Slide-Höhe, damit alle
-   Karten gleich hoch sind) würde sonst die max-height-Anhebung wieder
-   zunichtemachen — deshalb hier zusätzlich auf auto zurücksetzen. */
-.hinweis-slide > .card.expanded { max-height: 2000px; height: auto; }
+.hinweis-slide > .card.expanded .card-clip { max-height: 2000px; }
 .hinweis-slide > .card::after {
   content: "";
   position: absolute;
@@ -456,8 +471,8 @@ main {
    ist. */
 .hinweis-expand-btn {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 34px;
+  right: 34px;
   bottom: 2px;
   z-index: 1;
   border: none;
@@ -513,10 +528,14 @@ main {
   border-radius: 999px;
   pointer-events: none;
 }
+/* ideen-backlog.md #18: "top: 50%" bezog sich auf die ganze
+   .hinweis-carousel-wrap, die mit einer aufgeklappten (.expanded) Karte
+   mitwächst — die Pfeile rutschten dadurch in die Mitte des langen Texts
+   statt am Kartenrand zu bleiben. Fester Abstand von oben statt
+   vertikaler Zentrierung behebt das, unabhängig von der Kartenhöhe. */
 .hinweis-arrow {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 38px;
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -528,6 +547,7 @@ main {
   justify-content: center;
   cursor: pointer;
   box-shadow: var(--shadow);
+  z-index: 2;
 }
 .hinweis-arrow svg { width: 16px; height: 16px; }
 .hinweis-arrow.prev { left: 6px; }
