@@ -1350,16 +1350,19 @@ function markFolderSeen(key) {
 }
 
 // Ordner-Farben: jeder Ordner bekommt automatisch eine eigene, pastellige
-// Farbe zur besseren Übersicht — deterministisch aus der Ordner-Id
-// abgeleitet (djb2-Hash → Farbton), kein Datenbank-Feld nötig. Gleicher
-// Ordner ergibt bei jedem Aufruf dieselbe Farbe, das gilt automatisch auch
-// für alle bereits bestehenden Ordner. "Ohne Ordner" bleibt neutral.
+// Farbe zur besseren Übersicht (ganze Kachel eingefärbt, nicht nur das
+// Icon) — deterministisch aus der Ordner-Id abgeleitet (djb2-Hash →
+// Farbton), kein Datenbank-Feld nötig. Gleicher Ordner ergibt bei jedem
+// Aufruf dieselbe Farbe, das gilt automatisch auch für alle bereits
+// bestehenden Ordner. "Ohne Ordner" bleibt neutral. Sättigung/Helligkeit
+// bewusst mittig gewählt: erkennbar pastellig, aber weder blass noch
+// grell (kein zu starker Kontrast).
 function folderColorStyle(id) {
   if (!id) return "";
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   const hue = h % 360;
-  return ` style="--folder-bg:hsl(${hue} 62% 87%);--folder-fg:hsl(${hue} 40% 32%)"`;
+  return ` style="--folder-bg:hsl(${hue} 58% 84%);--folder-line:hsl(${hue} 40% 68%);--folder-fg:hsl(${hue} 45% 26%)"`;
 }
 
 // dateiCards: bereits auf Typ "datei" und die aktive Klasse gefilterte Liste.
@@ -2004,6 +2007,22 @@ function wireHinweisCarousel() {
       btn.textContent = expanded ? "Weniger anzeigen" : "Mehr anzeigen";
     });
     card.appendChild(btn);
+  });
+
+  // Nutzerwunsch 07.09.2026: Nicht mehr nur der "Mehr anzeigen"-Knopf,
+  // sondern ein Tipp/Klick irgendwo auf der Karte klappt den Hinweis auf
+  // (bzw. wieder zu). Klicks auf echte Bedienelemente (Aktionsmenü,
+  // Anhänge, Links, verknüpfte Karten, …) lösen das NICHT aus — die
+  // sollen weiterhin normal funktionieren.
+  elFeed.querySelectorAll(".hinweis-slide > .card").forEach((card) => {
+    if (card.dataset.tapToggleWired) return;
+    card.dataset.tapToggleWired = "1";
+    card.addEventListener("click", (ev) => {
+      if (ev.target.closest("a, button, summary, input, textarea, select, [data-action]")) return;
+      const btn = card.querySelector(".hinweis-expand-btn");
+      const expanded = card.classList.toggle("expanded");
+      if (btn) btn.textContent = expanded ? "Weniger anzeigen" : "Mehr anzeigen";
+    });
   });
 
   // ideen-backlog.md #29: .hinweis-carousel ist ein horizontal scrollender

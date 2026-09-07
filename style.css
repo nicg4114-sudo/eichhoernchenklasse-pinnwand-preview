@@ -578,6 +578,10 @@ main {
   padding: 4px;
 }
 .hinweis-slide > .card.expanded .hinweis-expand-btn { position: static; margin-top: 6px; }
+/* Nutzerwunsch 07.09.2026: Tipp/Klick irgendwo auf der Karte klappt auf/zu
+   (siehe wireHinweisCarousel) — Zeigefinger nur, solange es wirklich
+   etwas zum Aufklappen gibt. */
+.hinweis-slide > .card:has(.hinweis-expand-btn) { cursor: pointer; }
 /* Die Ersteller-/Zeitzeile wird hier schnell zwei- bis dreizeilig und
    frisst unnötig Höhe — im Karussell auf eine Zeile mit "…" kürzen statt
    ganz zu verstecken (voller Text bleibt sichtbar, sobald die Karte
@@ -922,9 +926,8 @@ main {
   align-items: flex-start;
   gap: 6px;
   padding: 14px 12px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--folder-bg, var(--line));
-  background: var(--card);
+  border: 1px solid var(--folder-line, var(--line));
+  background: var(--folder-bg, var(--card));
   border-radius: 14px;
   cursor: pointer;
   text-align: left;
@@ -940,9 +943,11 @@ main {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: var(--folder-bg, var(--accent-bg));
+  background: rgba(255, 255, 255, .55);
   color: var(--folder-fg, var(--accent-dk));
 }
+.folder-tile-label, .folder-tile-count { color: var(--folder-fg, inherit); }
+.folder-tile-count { opacity: .8; }
 /* Ordner-Farbpunkt vor dem Namen in der Ordner-Detailansicht, gleiche
    automatisch zugewiesene Farbe wie die Kachel im Ordner-Raster. */
 .folder-color-dot {
@@ -950,7 +955,7 @@ main {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--folder-bg, var(--accent-bg));
+  background: var(--folder-fg, var(--accent-dk));
   margin-right: 8px;
   vertical-align: middle;
 }
