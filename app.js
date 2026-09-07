@@ -889,10 +889,13 @@ function renderCard(c, opts) {
       <button data-action="restore" data-card="${c.id}">Wiederherstellen</button>
       <button class="danger" data-action="delete-forever" data-card="${c.id}">Endgültig löschen</button>`;
   } else {
-    // "Verschieben" nur bei Datei-Karten mit Klassenbezug — gemeinsame
-    // Dateien (beide Klassen) können ohnehin keinem Ordner zugeordnet
-    // werden (siehe update_card).
-    const moveBtn = (c.type === "datei" && c.class_id)
+    // ideen-backlog.md #3: früher nur bei Datei-Karten mit eigener Klasse
+    // sichtbar — der Kommentar dazu war seit Migration 017 veraltet,
+    // gemeinsame Dateien können sehr wohl in (gemeinsamen oder
+    // klassenspezifischen) Ordnern liegen. Der Ordner bestimmt jetzt die
+    // Sichtbarkeit mit (siehe migration-019), also darf jede Datei
+    // verschoben werden.
+    const moveBtn = c.type === "datei"
       ? `<button data-action="move-file" data-card="${c.id}">In Ordner verschieben</button>` : "";
     // Manuelles Übersteuern der Archiv-Zugehörigkeit (siehe isArchived,
     // Migration 015) — unabhängig vom Kartentyp und vom Datum.
@@ -2847,15 +2850,23 @@ async function handleFeedClick(ev) {
     case "move-file": {
       const c = cardById(cardId);
       if (!c) break;
+      // ideen-backlog.md #3: alle Ordner anbieten, nicht mehr nur die zur
+      // aktuellen Klasse passenden — der gewählte Ordner bestimmt jetzt
+      // selbst die Sichtbarkeit der Datei mit (siehe migration-019), ein
+      // Wechsel der Klasse per Ordnerwahl ist also ausdrücklich möglich.
       const opts = [{ value: "", label: "Ohne Ordner" }].concat(
-        foldersList.filter((f) => !f.class_id || f.class_id === c.class_id)
-          .map((f) => ({ value: f.id, label: f.class_id ? f.name : `🏫 ${f.name}` })));
+        foldersList.map((f) => {
+          const cls = f.class_id ? classesList.find((x) => x.id === f.class_id) : null;
+          const icon = f.class_id ? (cls ? CLASS_ICON[cls.slug] || "" : "") : "🏫";
+          return { value: f.id, label: `${icon} ${f.name}`.trim() };
+        }));
       const vals = await promptDlg("Datei verschieben",
         [{ name: "folder_id", label: "Ordner", value: c.folder_id || "", options: opts }]);
       if (!vals) break;
       // Reine Umsortierung, keine inhaltliche Bearbeitung — zählt bewusst
       // nicht als "Zuletzt geändert" (kein creator_name im Payload, siehe
-      // update_card).
+      // update_card). class_id wird bewusst nicht mitgeschickt, damit die
+      // RPC sie automatisch vom Ziel-Ordner übernimmt.
       await doAction(() => rpc("update_card", { p_id: c.id, p: { folder_id: vals.folder_id } }),
         "Datei verschoben.");
       break;
