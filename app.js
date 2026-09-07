@@ -1109,31 +1109,17 @@ function ortsname() {
   return cls ? (CLASS_GREETING_NAME[cls.slug] || `${cls.name}-Pinnwand`) : "Klassen-Pinnwand";
 }
 
-// Nutzerwunsch 07.09.2026: Begrüßungstext und Elternabend-Hinweis sind auf
-// der Startseite weg (Termin steht ohnehin schon in der "Nächster
-// Termin"-Kachel) — stattdessen ein schmaler Reiter, der den Stundenplan
-// direkt auf der Startseite aufklappt, ohne extra Navigation. Ein-/
-// ausgeklappt-Zustand geräteseitig gemerkt wie zuvor bei #14 (dort war es
-// der ganze Begrüßungsblock, jetzt nur der Stundenplan). Der Reiter ist
-// jetzt die einzige Stelle für den Stundenplan (die eigene "Stundenplan"-
-// Ansicht/Kalender-Menü entfällt), deshalb inklusive Bearbeiten-Button.
-const STUNDENPLAN_STRIP_KEY = "pinnwand_stundenplan_reiter_offen";
-
+// Nutzerwunsch 07.09.2026, angepasst 07.09.2026: Begrüßungstext und
+// Elternabend-Hinweis sind auf der Startseite weg (Termin steht ohnehin
+// schon in der "Nächster Termin"-Kachel) — stattdessen ein schmaler
+// Reiter. Klappt sich nicht mehr auf, sondern führt wie die anderen
+// Rubriken (Kalender, Termine, …) in eine eigene Ansicht.
 function renderStundenplanStrip() {
-  const open = localStorage.getItem(STUNDENPLAN_STRIP_KEY) === "1";
-  const editBtn = classLocked ? "" :
-    `<button type="button" class="btn small ghost" data-action="edit-stundenplan">Bearbeiten</button>`;
   return `
-    <div class="willkommen ${open ? "" : "collapsed"}">
-      <button type="button" class="willkommen-toggle" data-action="toggle-willkommen">
-        <span class="willkommen-title">${ICONS.kalender}Stundenplan</span>
-        <span class="willkommen-chevron">${ICONS.chevron}</span>
-      </button>
-      <div class="willkommen-body"><div class="willkommen-body-inner">
-        ${renderStundenplanTable()}
-        ${editBtn ? `<div class="dateien-head"><span class="spacer"></span>${editBtn}</div>` : ""}
-      </div></div>
-    </div>`;
+    <button type="button" class="willkommen willkommen-nav" data-action="open-rubrik" data-type="stundenplan">
+      <span class="willkommen-title">${ICONS.kalender}Stundenplan</span>
+      <span class="willkommen-chevron">${ICONS.chevron}</span>
+    </button>`;
 }
 
 // ideen-backlog.md #21: Täglicher Willkommens-Splashscreen, zusätzlich zum
@@ -1363,6 +1349,19 @@ function markFolderSeen(key) {
   localStorage.setItem(FOLDER_SEEN_KEY, JSON.stringify(seen));
 }
 
+// Ordner-Farben: jeder Ordner bekommt automatisch eine eigene, pastellige
+// Farbe zur besseren Übersicht — deterministisch aus der Ordner-Id
+// abgeleitet (djb2-Hash → Farbton), kein Datenbank-Feld nötig. Gleicher
+// Ordner ergibt bei jedem Aufruf dieselbe Farbe, das gilt automatisch auch
+// für alle bereits bestehenden Ordner. "Ohne Ordner" bleibt neutral.
+function folderColorStyle(id) {
+  if (!id) return "";
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  return ` style="--folder-bg:hsl(${hue} 62% 87%);--folder-fg:hsl(${hue} 40% 32%)"`;
+}
+
 // dateiCards: bereits auf Typ "datei" und die aktive Klasse gefilterte Liste.
 function renderFolderView(dateiCards) {
   const backHead = (label, action, extra = "") => `
@@ -1384,7 +1383,7 @@ function renderFolderView(dateiCards) {
       const items = groups.get(key) || [];
       const newCount = items.filter((c) => new Date(c.created_at).getTime() > (seen[key] || 0)).length;
       return `
-        <button class="folder-tile" data-action="open-folder" data-folder="${esc(key)}">
+        <button class="folder-tile" data-action="open-folder" data-folder="${esc(key)}"${folderColorStyle(key)}>
           ${newCount ? `<span class="count-badge">${newCount}</span>` : ""}
           <span class="folder-tile-icon">${ICONS.folder}</span>
           <span class="folder-tile-label">${esc(name)}</span>
@@ -1410,8 +1409,9 @@ function renderFolderView(dateiCards) {
   const manage = (!classLocked && folder) ? `
     <button class="btn small" data-action="rename-folder" data-folder="${folder.id}">Umbenennen</button>
     <button class="btn small danger" data-action="delete-folder" data-folder="${folder.id}">Löschen</button>` : "";
+  const dot = folder ? `<span class="folder-color-dot"${folderColorStyle(folder.id)}></span>` : "";
   return backHead("Ordner", "open-folder-grid", manage)
-    + `<h2 class="group-label" style="margin:4px 2px 12px">${esc(folder ? folder.name : "Ohne Ordner")}</h2>`
+    + `<h2 class="group-label" style="margin:4px 2px 12px">${dot}${esc(folder ? folder.name : "Ohne Ordner")}</h2>`
     + `<div class="group-body">${items.length
         ? items.map(renderCard).join("")
         : `<p class="rubrik-panel-empty">Noch keine Datei in diesem Ordner.</p>`}</div>`;
@@ -1584,12 +1584,11 @@ function wireKalender() {
   });
 }
 
-/* ---------- Stundenplan-Tabelle (nur noch als Startseiten-Reiter) ------- */
+/* ---------- Stundenplan-Ansicht (eigenständige Rubrik) ------------------ */
 // Reine Lese-Tabelle, 5 Spalten (Mo–Fr) — die Bearbeitung läuft weiterhin
-// über die Verwaltung (renderKalAdminSchedule), der "Bearbeiten"-Button in
-// renderStundenplanStrip() ist das einzige Sprungbrett dahin (Nutzerwunsch
-// 07.09.2026: Stundenplan läuft komplett über den Startseiten-Reiter,
-// keine eigene Ansicht/kein Kalender-Menü mehr).
+// über die Verwaltung (renderKalAdminSchedule), der "Bearbeiten"-Button
+// hier ist das Sprungbrett dahin. Erreichbar wie jede andere Rubrik über
+// den Stundenplan-Reiter auf der Startseite (renderStundenplanStrip()).
 function renderStundenplanTable() {
   if (!activeClassId) {
     return `<p class="rubrik-panel-empty">Bitte oben eine Klasse wählen, um den Stundenplan zu sehen.</p>`;
@@ -1623,6 +1622,15 @@ function renderStundenplanTable() {
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+}
+
+function renderStundenplanView() {
+  const head = classLocked ? "" : `
+    <div class="dateien-head">
+      <span class="spacer"></span>
+      <button class="btn small ghost" data-action="edit-stundenplan">Bearbeiten</button>
+    </div>`;
+  return head + renderStundenplanTable();
 }
 
 /* ---------- Verwaltung: Stundenplan/Ereignisse/Ferien (nur Hauptlink) --- */
@@ -1933,7 +1941,7 @@ const EMPTY_TEXT = {
 
 // Views mit eigener Leer-Anzeige (Karussell/Kacheln zeigen ihren
 // Leer-Zustand selbst) — der generische Hinweistext ist dort überflüssig.
-const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender", "aufgaben"]);
+const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender", "aufgaben", "stundenplan"]);
 
 // Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint — bewusst
 // höher als eine Bildschirmhöhe, damit er nicht schon nach kurzem Scrollen
@@ -2043,6 +2051,7 @@ function hashFromState() {
   if (view === "papierkorb") return "#papierkorb";
   if (view === "kalender") return calendarSelectedDate ? `#kalender-${calendarSelectedDate}` : "#kalender";
   if (view === "aufgaben") return "#aufgaben";
+  if (view === "stundenplan") return "#stundenplan";
   return "";
 }
 
@@ -2067,6 +2076,7 @@ function applyHash(hash) {
   } else if (h === "kalender") {
     view = "kalender"; calendarSelectedDate = null; calendarMonth = null;
   } else if (h === "aufgaben") { view = "aufgaben"; }
+  else if (h === "stundenplan") { view = "stundenplan"; }
   else if (!h.startsWith("karte-")) { view = "feed"; }
 }
 
@@ -2214,6 +2224,8 @@ function render() {
     wireKalender();
   } else if (view === "aufgaben") {
     elFeed.innerHTML = renderAufgabenView(list.filter((c) => c.is_aufgabe));
+  } else if (view === "stundenplan") {
+    elFeed.innerHTML = renderStundenplanView();
   } else {
     elFeed.innerHTML = renderArchivView(list);
   }
@@ -3056,6 +3068,8 @@ async function handleFeedClick(ev) {
         view = "kalender";
         calendarSelectedDate = null;
         calendarMonth = null;
+      } else if (type === "stundenplan") {
+        view = "stundenplan";
       } else if (type === "aufgaben") {
         view = "aufgaben";
       }
@@ -3084,12 +3098,6 @@ async function handleFeedClick(ev) {
     }
     case "edit-stundenplan": {
       openKalenderAdmin("schedule");
-      break;
-    }
-    case "toggle-willkommen": {
-      const now = localStorage.getItem(STUNDENPLAN_STRIP_KEY) === "1";
-      localStorage.setItem(STUNDENPLAN_STRIP_KEY, now ? "0" : "1");
-      render();
       break;
     }
     case "aufgabe-done": {

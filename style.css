@@ -437,6 +437,23 @@ main {
   grid-template-rows: 1fr;
   transition: grid-template-rows .2s ease;
 }
+/* Stundenplan-Reiter (07.09.2026): keine Aufklapp-Fläche mehr, sondern ein
+   Navigations-Knopf wie bei den anderen Rubriken — .willkommen liefert
+   Rahmen/Abstand, .willkommen-nav macht daraus direkt den Klick-Button. */
+.willkommen-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.willkommen-nav .willkommen-chevron svg { transform: rotate(0deg); }
 .willkommen-body-inner { overflow: hidden; min-height: 0; }
 .willkommen.collapsed .willkommen-body { grid-template-rows: 0fr; }
 .willkommen-sub { font-size: .82rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
@@ -906,6 +923,7 @@ main {
   gap: 6px;
   padding: 14px 12px;
   border: 1px solid var(--line);
+  border-left: 3px solid var(--folder-bg, var(--line));
   background: var(--card);
   border-radius: 14px;
   cursor: pointer;
@@ -922,8 +940,19 @@ main {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: var(--accent-bg);
-  color: var(--accent-dk);
+  background: var(--folder-bg, var(--accent-bg));
+  color: var(--folder-fg, var(--accent-dk));
+}
+/* Ordner-Farbpunkt vor dem Namen in der Ordner-Detailansicht, gleiche
+   automatisch zugewiesene Farbe wie die Kachel im Ordner-Raster. */
+.folder-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--folder-bg, var(--accent-bg));
+  margin-right: 8px;
+  vertical-align: middle;
 }
 .folder-tile-icon svg { width: 16px; height: 16px; }
 .folder-tile-label { font-weight: 800; font-size: .9rem; }
