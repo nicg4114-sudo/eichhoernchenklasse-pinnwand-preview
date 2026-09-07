@@ -1179,7 +1179,7 @@ function renderTerminAufgabenRow(termine, list) {
     const d = parseISODate(next.event_date);
     terminTile = `
       <button class="dash-tile dash-tile-termin" data-action="open-rubrik" data-type="termin" data-card="${next.id}">
-        <span class="dash-tile-termin-label">Nächster anstehender Termin:</span>
+        <span class="dash-tile-termin-label">Nächster Termin:</span>
         <span class="dash-tile-termin-date">${d.getDate()}. ${MONTH_SHORT[d.getMonth()]}</span>
         <span class="dash-tile-termin-title">${esc(next.title)}</span>
         ${next.event_time ? `<span class="dash-tile-termin-time">${esc(fmtTime(next.event_time))} Uhr</span>` : ""}
@@ -1530,13 +1530,18 @@ function renderKalenderDay() {
     </div>`;
 }
 
+// ideen-backlog.md #22: die Verwaltungspunkte stehen jetzt als eigene
+// Kacheln direkt unter dem Kalender, statt hinter einem "Verwalten"-Knopf
+// in einem Zwischenmenü versteckt zu sein — ein Klick weniger für
+// Hauptlink-Nutzer.
 function renderKalenderView() {
-  const head = classLocked ? "" : `
-    <div class="dateien-head">
-      <span class="spacer"></span>
-      <button class="btn small ghost" data-action="open-kalender-admin">Verwalten</button>
+  const adminRow = classLocked ? "" : `
+    <div class="cal-admin-row">
+      <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="schedule">${ICONS.kalender}Stundenplan</button>
+      <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="recurring">${ICONS.kalender}Wiederkehrende Ereignisse</button>
+      <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="holidays">${ICONS.kalender}Ferien &amp; freie Tage</button>
     </div>`;
-  return head + `<div class="cal-wrap">${renderKalenderMonth()}</div>${renderKalenderDay()}`;
+  return `<div class="cal-wrap">${renderKalenderMonth()}</div>${renderKalenderDay()}${adminRow}`;
 }
 
 function wireKalender() {
@@ -1617,6 +1622,8 @@ function klassenOptionsMitGemeinsam(selected) {
 
 function openKalenderAdmin(startScreen) {
   if (startScreen === "schedule") renderKalAdminSchedule();
+  else if (startScreen === "recurring") renderKalAdminRecurring();
+  else if (startScreen === "holidays") renderKalAdminHolidays();
   else renderKalAdminHome();
   dlgKalenderAdmin.showModal();
 }
@@ -2948,7 +2955,7 @@ async function handleFeedClick(ev) {
       break;
     }
     case "open-kalender-admin": {
-      openKalenderAdmin();
+      openKalenderAdmin(btn.dataset.screen);
       break;
     }
     case "edit-stundenplan": {

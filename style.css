@@ -1063,6 +1063,16 @@ main {
 .cal-actions svg { width: 15px; height: 15px; display: block; }
 
 /* Kalender-Ansicht (ideen-backlog.md #11) */
+/* ideen-backlog.md #22: Verwaltungspunkte als Kacheln direkt unter dem
+   Kalender statt hinter einem "Verwalten"-Zwischenmenü. */
+.cal-admin-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cal-admin-row .btn svg { width: 15px; height: 15px; margin-right: 4px; vertical-align: -2px; }
+
 .cal-wrap {
   background: var(--card);
   border: 1px solid var(--line);
