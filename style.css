@@ -1267,6 +1267,21 @@ main {
 }
 .sched-table input.sched-time { width: 58px; min-width: 58px; }
 
+/* ideen-backlog.md #22: Schalter pro Wochentag, blendet die
+   Nachmittagsstunden (Zeilen ab 12:00) für diesen Tag im Editor aus,
+   ohne die Werte zu löschen. */
+.sched-nachmittag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 10px;
+  font-size: .82rem;
+}
+.sched-nachmittag-label { color: var(--muted); font-weight: 600; }
+.sched-nachmittag-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.sched-nachmittag-toggle input { width: 15px; height: 15px; }
+
 /* Stundenplan-Ansicht (rein lesend, alle Nutzer, siehe renderStundenplanView) */
 .stundenplan-table td, .stundenplan-table th {
   text-align: center;

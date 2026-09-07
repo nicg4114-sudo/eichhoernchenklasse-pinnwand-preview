@@ -1677,6 +1677,14 @@ function renderKalAdminHome() {
 
 // ---- Stundenplan ----
 
+// ideen-backlog.md #22: eine Stundenplan-Zeile gilt als "Nachmittag", wenn
+// ihre Startzeit ab 12:00 liegt (String-Vergleich reicht bei "HH:MM").
+// Rein editor-seitige Anzeigehilfe, keine eigene Datenbank-Spalte nötig —
+// die Werte bleiben beim Ausblenden erhalten, nur die Zelle wird versteckt.
+function isAfternoonTime(hhmm) {
+  return !!hhmm && hhmm >= "12:00";
+}
+
 function renderKalAdminSchedule(classId) {
   classId = classId || activeClassId || classesList[0]?.id || "";
   const periods = [1, 2, 3, 4, 5, 6];
@@ -1689,9 +1697,10 @@ function renderKalAdminSchedule(classId) {
   const rows = (usedPeriods.length ? usedPeriods : [1]).map((p) => {
     const cells = byPeriod.get(p) || {};
     const first = Object.values(cells)[0];
+    const start = first?.start_time?.slice(0, 5) || "";
     return `
-      <tr data-period="${p}">
-        <td><input type="text" class="sched-time" data-role="start" value="${esc(first?.start_time?.slice(0, 5) || "")}" placeholder="08:10" size="5"></td>
+      <tr data-period="${p}" data-afternoon="${isAfternoonTime(start) ? "1" : ""}">
+        <td><input type="text" class="sched-time" data-role="start" value="${esc(start)}" placeholder="08:10" size="5"></td>
         <td><input type="text" class="sched-time" data-role="end" value="${esc(first?.end_time?.slice(0, 5) || "")}" placeholder="09:45" size="5"></td>
         ${[1, 2, 3, 4, 5].map((wd) => `<td><input type="text" class="sched-subject" data-weekday="${wd}" value="${esc(cells[wd]?.subject || "")}" placeholder="—"></td>`).join("")}
         <td><button type="button" class="icon-btn" data-action="sched-remove-row" title="Zeile entfernen">✕</button></td>
@@ -1705,6 +1714,14 @@ function renderKalAdminSchedule(classId) {
       <select id="schedClassSelect">${classesList.map((cl) =>
         `<option value="${esc(cl.id)}" ${cl.id === classId ? "selected" : ""}>${CLASS_ICON[cl.slug] || ""} ${esc(cl.name)}</option>`).join("")}</select>
     </label>
+    <div class="sched-nachmittag-row">
+      <span class="sched-nachmittag-label">Nachmittag an:</span>
+      ${[1, 2, 3, 4, 5].map((wd) => `
+        <label class="sched-nachmittag-toggle">
+          <input type="checkbox" data-weekday-toggle="${wd}" checked>
+          <span>${WEEKDAY_SHORT[wd]}</span>
+        </label>`).join("")}
+    </div>
     <div class="table-scroll">
       <table class="sched-table">
         <thead><tr><th>von</th><th>bis</th>${WEEKDAY_SHORT.slice(1, 6).map((w) => `<th>${w}</th>`).join("")}<th></th></tr></thead>
@@ -1712,7 +1729,9 @@ function renderKalAdminSchedule(classId) {
       </table>
     </div>
     <button type="button" class="btn link" data-action="sched-add-row">+ Stunde hinzufügen</button>
-    <p class="field-hint">Leere Felder bei einem Fach lassen die Stunde an dem Tag einfach weg.</p>
+    <p class="field-hint">Leere Felder bei einem Fach lassen die Stunde an dem Tag einfach weg.
+      Mit "Nachmittag an" oben blendest du die Nachmittagsstunden (ab 12:00)
+      für einzelne Tage aus — die Einträge bleiben dabei erhalten.</p>
     <div class="dlg-actions">
       <button type="button" class="btn ghost" data-action="admin-back">Zurück</button>
       <button type="button" class="btn primary" data-action="sched-save">Speichern</button>
@@ -1730,12 +1749,37 @@ function renderKalAdminSchedule(classId) {
         <td><button type="button" class="icon-btn" data-action="sched-remove-row" title="Zeile entfernen">✕</button></td>
       </tr>`);
     wireScheduleRemoveButtons();
+    wireAfternoonTimeInputs();
   });
   wireScheduleRemoveButtons();
+  wireAfternoonTimeInputs();
+  wireNachmittagToggles();
 
   function wireScheduleRemoveButtons() {
     elKalAdminBody.querySelectorAll("[data-action='sched-remove-row']").forEach((btn) => {
       btn.onclick = () => btn.closest("tr").remove();
+    });
+  }
+
+  // Zeile live als "Nachmittag" markieren, sobald die Startzeit ab 12:00
+  // eingegeben wird — auch für neu hinzugefügte Zeilen, nicht nur beim
+  // ersten Rendern aus bestehenden Daten.
+  function wireAfternoonTimeInputs() {
+    elKalAdminBody.querySelectorAll("[data-role='start']").forEach((inp) => {
+      inp.oninput = () => {
+        inp.closest("tr").dataset.afternoon = isAfternoonTime(inp.value.trim()) ? "1" : "";
+      };
+    });
+  }
+
+  function wireNachmittagToggles() {
+    elKalAdminBody.querySelectorAll("[data-weekday-toggle]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const wd = cb.dataset.weekdayToggle;
+        elKalAdminBody.querySelectorAll(`#schedRows tr[data-afternoon="1"] [data-weekday="${wd}"]`).forEach((inp) => {
+          inp.closest("td").hidden = !cb.checked;
+        });
+      });
     });
   }
 
