@@ -239,7 +239,6 @@ const dlgMore = $("dlgMore");
 const elMoreBtn = $("moreBtn");
 const dlgKalenderAdmin = $("dlgKalenderAdmin");
 const elKalAdminBody = $("kalAdminBody");
-const dlgKalenderMenu = $("dlgKalenderMenu");
 const dlgSearch = $("dlgSearch");
 const elSearchBtn = $("searchBtn");
 const elSearchInput = $("searchInput");
@@ -465,7 +464,7 @@ function toast(msg, isError = false) {
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgKalenderMenu, dlgSearch, dlgSplash].some((d) => d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgSearch, dlgSplash].some((d) => d.open);
 }
 
 /* ---------- API ---------- */
@@ -1091,14 +1090,15 @@ function renderStart(list) {
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const termine = list.filter((c) => c.type === "termin");
 
-  // Testweise (Nutzerwunsch 07.09.2026): Termin/Aufgaben/Kalender-Kacheln
-  // stehen jetzt vor dem Hinweis-Karussell statt danach, Begrüßung/
-  // Elternabend-Hinweis sind einem schmalen, aufklappbaren
-  // Stundenplan-Reiter gewichen (siehe renderStundenplanStrip()).
+  // Nutzerwunsch 07.09.2026: Termin/Aufgaben/Kalender-Kacheln stehen wieder
+  // unter dem Hinweis-Karussell, der Stundenplan-Reiter (statt Begrüßung/
+  // Elternabend) sitzt dazwischen. Der Stundenplan läuft jetzt vollständig
+  // über diesen Reiter — die Kalender-Kachel führt direkt in den Kalender,
+  // ohne Zwischenmenü.
   return statsLineHtml(list)
+    + renderHinweisCarousel(hinweise)
     + renderStundenplanStrip()
-    + renderTerminAufgabenRow(termine, list)
-    + renderHinweisCarousel(hinweise);
+    + renderTerminAufgabenRow(termine, list);
 }
 
 // Begrüßungsblock ganz oben: Klassenname automatisch aus activeClassId
@@ -1109,16 +1109,20 @@ function ortsname() {
   return cls ? (CLASS_GREETING_NAME[cls.slug] || `${cls.name}-Pinnwand`) : "Klassen-Pinnwand";
 }
 
-// Testweise (Nutzerwunsch 07.09.2026): Begrüßungstext und Elternabend-
-// Hinweis sind auf der Startseite weg (Termin steht ohnehin schon in der
-// "Nächster Termin"-Kachel darunter) — stattdessen ein schmaler Reiter,
-// der den Stundenplan direkt auf der Startseite aufklappt, ohne extra
-// Navigation. Ein-/ausgeklappt-Zustand geräteseitig gemerkt wie zuvor bei
-// #14 (dort war es der ganze Begrüßungsblock, jetzt nur der Stundenplan).
+// Nutzerwunsch 07.09.2026: Begrüßungstext und Elternabend-Hinweis sind auf
+// der Startseite weg (Termin steht ohnehin schon in der "Nächster
+// Termin"-Kachel) — stattdessen ein schmaler Reiter, der den Stundenplan
+// direkt auf der Startseite aufklappt, ohne extra Navigation. Ein-/
+// ausgeklappt-Zustand geräteseitig gemerkt wie zuvor bei #14 (dort war es
+// der ganze Begrüßungsblock, jetzt nur der Stundenplan). Der Reiter ist
+// jetzt die einzige Stelle für den Stundenplan (die eigene "Stundenplan"-
+// Ansicht/Kalender-Menü entfällt), deshalb inklusive Bearbeiten-Button.
 const STUNDENPLAN_STRIP_KEY = "pinnwand_stundenplan_reiter_offen";
 
 function renderStundenplanStrip() {
   const open = localStorage.getItem(STUNDENPLAN_STRIP_KEY) === "1";
+  const editBtn = classLocked ? "" :
+    `<button type="button" class="btn small ghost" data-action="edit-stundenplan">Bearbeiten</button>`;
   return `
     <div class="willkommen ${open ? "" : "collapsed"}">
       <button type="button" class="willkommen-toggle" data-action="toggle-willkommen">
@@ -1127,6 +1131,7 @@ function renderStundenplanStrip() {
       </button>
       <div class="willkommen-body"><div class="willkommen-body-inner">
         ${renderStundenplanTable()}
+        ${editBtn ? `<div class="dateien-head"><span class="spacer"></span>${editBtn}</div>` : ""}
       </div></div>
     </div>`;
 }
@@ -1223,9 +1228,9 @@ function renderTerminAufgabenRow(termine, list) {
   }
 
   const kalenderTile = `
-    <button class="dash-tile dash-tile-kalender" data-action="open-kalender-menu">
+    <button class="dash-tile dash-tile-kalender" data-action="open-rubrik" data-type="kalender">
       ${ICONS.kalender}
-      <span class="dash-tile-kalender-label">Kalender/Stundenplan</span>
+      <span class="dash-tile-kalender-label">Kalender</span>
     </button>`;
 
   const tiles = [terminTile, aufgabenTile, umfrageTile, kalenderTile].filter(Boolean);
@@ -1579,14 +1584,12 @@ function wireKalender() {
   });
 }
 
-/* ---------- Stundenplan-Ansicht (eigenständig, siehe #11) ---------- */
-// Reine Lese-Ansicht für alle, 5 Spalten (Mo–Fr) — die Bearbeitung läuft
-// weiterhin über die Verwaltung (renderKalAdminSchedule), hier nur ein
-// Sprungbrett dahin für den Hauptlink.
-
-// Gemeinsam von renderStundenplanView() und dem Stundenplan-Reiter auf der
-// Startseite (renderStundenplanStrip()) genutzt — reine Lese-Tabelle ohne
-// Kopfzeile/Bearbeiten-Button, die je nach Aufrufer selbst ergänzt werden.
+/* ---------- Stundenplan-Tabelle (nur noch als Startseiten-Reiter) ------- */
+// Reine Lese-Tabelle, 5 Spalten (Mo–Fr) — die Bearbeitung läuft weiterhin
+// über die Verwaltung (renderKalAdminSchedule), der "Bearbeiten"-Button in
+// renderStundenplanStrip() ist das einzige Sprungbrett dahin (Nutzerwunsch
+// 07.09.2026: Stundenplan läuft komplett über den Startseiten-Reiter,
+// keine eigene Ansicht/kein Kalender-Menü mehr).
 function renderStundenplanTable() {
   if (!activeClassId) {
     return `<p class="rubrik-panel-empty">Bitte oben eine Klasse wählen, um den Stundenplan zu sehen.</p>`;
@@ -1620,15 +1623,6 @@ function renderStundenplanTable() {
         <tbody>${rows}</tbody>
       </table>
     </div>`;
-}
-
-function renderStundenplanView() {
-  const head = classLocked ? "" : `
-    <div class="dateien-head">
-      <span class="spacer"></span>
-      <button class="btn small ghost" data-action="edit-stundenplan">Bearbeiten</button>
-    </div>`;
-  return head + renderStundenplanTable();
 }
 
 /* ---------- Verwaltung: Stundenplan/Ereignisse/Ferien (nur Hauptlink) --- */
@@ -1939,7 +1933,7 @@ const EMPTY_TEXT = {
 
 // Views mit eigener Leer-Anzeige (Karussell/Kacheln zeigen ihren
 // Leer-Zustand selbst) — der generische Hinweistext ist dort überflüssig.
-const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender", "aufgaben", "stundenplan"]);
+const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender", "aufgaben"]);
 
 // Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint — bewusst
 // höher als eine Bildschirmhöhe, damit er nicht schon nach kurzem Scrollen
@@ -2049,7 +2043,6 @@ function hashFromState() {
   if (view === "papierkorb") return "#papierkorb";
   if (view === "kalender") return calendarSelectedDate ? `#kalender-${calendarSelectedDate}` : "#kalender";
   if (view === "aufgaben") return "#aufgaben";
-  if (view === "stundenplan") return "#stundenplan";
   return "";
 }
 
@@ -2074,7 +2067,6 @@ function applyHash(hash) {
   } else if (h === "kalender") {
     view = "kalender"; calendarSelectedDate = null; calendarMonth = null;
   } else if (h === "aufgaben") { view = "aufgaben"; }
-  else if (h === "stundenplan") { view = "stundenplan"; }
   else if (!h.startsWith("karte-")) { view = "feed"; }
 }
 
@@ -2222,8 +2214,6 @@ function render() {
     wireKalender();
   } else if (view === "aufgaben") {
     elFeed.innerHTML = renderAufgabenView(list.filter((c) => c.is_aufgabe));
-  } else if (view === "stundenplan") {
-    elFeed.innerHTML = renderStundenplanView();
   } else {
     elFeed.innerHTML = renderArchivView(list);
   }
@@ -3096,10 +3086,6 @@ async function handleFeedClick(ev) {
       openKalenderAdmin("schedule");
       break;
     }
-    case "open-kalender-menu": {
-      dlgKalenderMenu.showModal();
-      break;
-    }
     case "toggle-willkommen": {
       const now = localStorage.getItem(STUNDENPLAN_STRIP_KEY) === "1";
       localStorage.setItem(STUNDENPLAN_STRIP_KEY, now ? "0" : "1");
@@ -3506,17 +3492,6 @@ async function init() {
   if (dlgKalenderAdmin) {
     dlgKalenderAdmin.addEventListener("click", (ev) => {
       if (ev.target.closest("[data-close]")) dlgKalenderAdmin.close();
-    });
-  }
-
-  // Auswahlmenü der Startseiten-Kachel "Kalender/Stundenplan" — führt zu
-  // den zwei eigenständigen Ansichten (getrennt, damit der Kalender nicht
-  // mehr mit dem Stundenplan vermischt ist).
-  if (dlgKalenderMenu) {
-    dlgKalenderMenu.addEventListener("click", (ev) => {
-      const item = ev.target.closest(".more-item[data-view]");
-      if (item) { view = item.dataset.view; render(); }
-      if (ev.target.closest("[data-close]")) dlgKalenderMenu.close();
     });
   }
 
