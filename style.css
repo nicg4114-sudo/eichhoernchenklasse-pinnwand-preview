@@ -493,7 +493,11 @@ main {
    Rand, kleine Pinnnadel oben) — deutlich abgesetzt von den weißen Karten
    darunter (Termin/Aufgaben), damit auf einen Blick klar ist: das hier
    ist der eine dauerhafte Aushang, der Rest ist der normale Feed. */
-.hinweis-carousel-wrap { position: relative; }
+/* margin-top (ideen-backlog.md #16): die Pfeile ragen per translateY(-50%)
+   zur Hälfte über die obere Kante hinaus (siehe .hinweis-arrow) — ohne
+   eigenen Abstand nach oben lag das direkt am oberen Seitenrand bzw. an
+   dem, was darüber steht. */
+.hinweis-carousel-wrap { position: relative; margin-top: 18px; }
 .hinweis-carousel {
   display: flex;
   /* Standard wäre align-items:stretch — würde alle Slides auf die Höhe
@@ -656,6 +660,10 @@ main {
 .hinweis-arrow.prev { left: 10px; }
 .hinweis-arrow.prev svg { transform: scaleX(-1); }
 .hinweis-arrow.next { right: 10px; }
+/* Home-Knopf (ideen-backlog.md #38): mittig zwischen den Pfeilen, springt
+   zur ersten Hinweis-Karte zurück — nur ab drei Karten gerendert. */
+.hinweis-arrow.home { left: 50%; transform: translate(-50%, -50%); width: 26px; height: 26px; }
+.hinweis-arrow.home svg { width: 14px; height: 14px; }
 .hinweis-dots {
   display: flex;
   justify-content: center;
@@ -973,7 +981,7 @@ main {
 
 /* ---------- Karten ---------- */
 
-.feed { display: flex; flex-direction: column; gap: 14px; }
+.feed { display: flex; flex-direction: column; gap: 18px; }
 /* Dezente Übergangsanimation bei echter Navigation (ideen-backlog.md #5,
    siehe navDirection/syncHistory in app.js) — bewusst kurz und klein
    gehalten, eine stille Aktualisierung ohne Navigation löst sie nicht aus. */

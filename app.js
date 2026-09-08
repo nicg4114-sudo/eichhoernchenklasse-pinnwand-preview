@@ -1156,9 +1156,15 @@ function renderHinweisCarousel(hinweise) {
     : "";
   // Pfeile fürs Weiterklicken ohne Wisch-Geste (z. B. am Computer ohne
   // Trackpad) und ein "1/2"-Zähler, damit auf einen Blick klar ist, dass es
-  // mehr als eine Karte gibt (siehe ideen-backlog.md #6).
+  // mehr als eine Karte gibt (siehe ideen-backlog.md #6). Ab drei Karten
+  // zusätzlich ein Home-Knopf mittig zwischen den Pfeilen, der direkt zur
+  // ersten Karte zurückspringt (ideen-backlog.md #38) — bei nur zwei
+  // Karten wäre er redundant zum "Vorheriger"-Pfeil.
+  const home = hinweise.length > 2
+    ? `<button type="button" class="hinweis-arrow home" data-action="hinweis-home" aria-label="Zum ersten Hinweis">${ICONS.home}</button>` : "";
   const arrows = multi ? `
     <button type="button" class="hinweis-arrow prev" data-dir="-1" aria-label="Vorheriger Hinweis">${ICONS.chevron}</button>
+    ${home}
     <button type="button" class="hinweis-arrow next" data-dir="1" aria-label="Nächster Hinweis">${ICONS.chevron}</button>` : "";
   const counter = multi ? `<span class="hinweis-counter">1/${hinweise.length}</span>` : "";
   return `
@@ -1561,10 +1567,14 @@ function renderKalenderDay() {
 // Kacheln direkt unter dem Kalender, statt hinter einem "Verwalten"-Knopf
 // in einem Zwischenmenü versteckt zu sein — ein Klick weniger für
 // Hauptlink-Nutzer.
+// ideen-backlog.md #17: "Stundenplan bearbeiten" gehört nicht hierher —
+// die eigenständige Stundenplan-Ansicht (renderStundenplanView()) hat
+// bereits ihren eigenen "Bearbeiten"-Knopf, ein zweiter Zugang über den
+// Kalender war redundant und irreführend (Kalender != Stundenplan).
+// Hier bleiben nur die tatsächlich kalenderbezogenen Verwaltungspunkte.
 function renderKalenderView() {
   const adminRow = classLocked ? "" : `
     <div class="cal-admin-row">
-      <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="schedule">${ICONS.kalender}Stundenplan</button>
       <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="recurring">${ICONS.kalender}Wiederkehrende Ereignisse</button>
       <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="holidays">${ICONS.kalender}Ferien &amp; freie Tage</button>
     </div>`;
@@ -1981,10 +1991,13 @@ function wireHinweisCarousel() {
   dots.forEach((d) => d.addEventListener("click", () => {
     el.scrollTo({ left: Number(d.dataset.index) * el.clientWidth, behavior: "smooth" });
   }));
-  elFeed.querySelectorAll(".hinweis-arrow").forEach((btn) => btn.addEventListener("click", () => {
+  elFeed.querySelectorAll(".hinweis-arrow[data-dir]").forEach((btn) => btn.addEventListener("click", () => {
     const target = Math.max(0, Math.min(slideCount - 1, hinweisCarouselIndex + Number(btn.dataset.dir)));
     el.scrollTo({ left: target * el.clientWidth, behavior: "smooth" });
   }));
+  elFeed.querySelector("[data-action='hinweis-home']")?.addEventListener("click", () => {
+    el.scrollTo({ left: 0, behavior: "smooth" });
+  });
 
   // Karten, die trotz fester Höhe (siehe style.css) höher sind als ihr
   // sichtbarer Ausschnitt, bekommen einen "Mehr anzeigen"-Knopf (#2 aus
