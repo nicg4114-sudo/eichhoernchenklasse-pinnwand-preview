@@ -628,7 +628,7 @@ const ADMIN_CODE_RPCS = new Set([
   "delete_folder", "set_schedule", "create_recurring_event",
   "update_recurring_event", "delete_recurring_event", "set_school_holidays",
   "add_poll_option", "update_poll_option", "delete_poll_option",
-  "list_feedback", "comment_feedback",
+  "list_feedback", "comment_feedback", "delete_feedback",
 ]);
 
 async function rpc(name, args = {}) {
@@ -1875,7 +1875,10 @@ function renderFeedbackView() {
         <label class="field feedback-comment-field"><span>Interner Kommentar</span>
           <textarea maxlength="2000" rows="2" placeholder="Notiz für die Admins, z. B. „erledigt“…">${esc(f.admin_comment || "")}</textarea>
         </label>
-        <button type="button" class="btn small ghost" data-action="feedback-comment-save" data-id="${f.id}">Kommentar speichern</button>
+        <div class="feedback-item-actions">
+          <button type="button" class="btn small ghost" data-action="feedback-comment-save" data-id="${f.id}">Kommentar speichern</button>
+          <button type="button" class="btn small ghost danger" data-action="feedback-delete" data-id="${f.id}">Löschen</button>
+        </div>
       </div>`;
   }).join("") + `</div>`;
 }
@@ -3496,6 +3499,19 @@ async function handleFeedClick(ev) {
         render();
       } catch (err) {
         toast(err.message || "Speichern fehlgeschlagen.", true);
+      }
+      break;
+    }
+    case "feedback-delete": {
+      const ok = await confirmDlg("Diese Feedback-Nachricht endgültig löschen?", "Löschen");
+      if (!ok) break;
+      try {
+        await rpc("delete_feedback", { p_id: btn.dataset.id });
+        toast("Feedback gelöscht.");
+        feedbackEntries = null;
+        render();
+      } catch (err) {
+        toast(err.message || "Löschen fehlgeschlagen.", true);
       }
       break;
     }

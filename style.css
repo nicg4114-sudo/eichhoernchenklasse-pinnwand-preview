@@ -407,6 +407,8 @@ main {
 .feedback-list .feedback-item:first-child { border-top: none; }
 .feedback-comment-field { margin-top: 8px; }
 .feedback-comment-field textarea { font-size: .85rem; }
+.feedback-item-actions { display: flex; gap: 8px; margin-top: 8px; }
+.feedback-item-actions .btn.ghost.danger { color: var(--danger); }
 
 /* ---------- Start-Dashboard ---------- */
 
