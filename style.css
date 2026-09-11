@@ -72,7 +72,7 @@
      eigene Farbe, damit sie nicht wie eine der drei Einzelfarben wirkt. */
   --c-beteiligung: #7c5980;
   --line-strong: #d8cbb0;
-  --bottom-nav-h: 76px; /* Nutzerwunsch 11.09.2026: nochmal etwas größer (zuvor 68px, davor 60px) */
+  --bottom-nav-h: 86px; /* Nutzerwunsch 11.09.2026: nochmal größer (zuvor 76px, 68px, 60px) */
   /* Fließende Dashboard-Skalierung nach Bildschirmhöhe (dvh): zwischen
      600px (kleine Handys, z. B. iPhone SE) und 860px (große Handys)
      wandert --dash-scale linear von 0.6 auf 1 — darunter/darüber bleibt
@@ -1623,6 +1623,13 @@ main {
 /* Ersetzt das frühere ☰-Menü: feste Leiste unten mit den Ansichten
    (Pinnwand/Archiv/Papierkorb), dem Version-Tab und dem Plus-Button
    mittig darüber — mit dem Daumen leichter erreichbar. */
+/* Nutzerwunsch 11.09.2026: echter Ausschnitt ("Notch") in der oberen
+   Kante statt nur eines Kreises mit passendem Rand daneben — die Leiste
+   selbst bekommt per Masken-Verlauf ein halbkreisförmiges Loch genau an
+   der Start-Position, der Kreis-Knopf sitzt darin und wirkt dadurch
+   wirklich mit der Kante verbunden statt nur danebengelegt. Am Referenz-
+   bild orientiert: Leiste + Icons/Schrift insgesamt größer, der
+   Start-Knopf deutlich abgesetzt (gefüllter Kreis in Akzentfarbe). */
 .bottom-nav {
   position: fixed;
   left: 0;
@@ -1635,21 +1642,33 @@ main {
   align-items: center;
   height: var(--bottom-nav-h);
   padding: 0 6px calc(env(safe-area-inset-bottom));
-  background: var(--card);
-  border-top: 1px solid var(--line);
+  background: transparent;
   /* Der Start-Kreis (.bn-start-bump) ragt über diese obere Kante hinaus —
      darf nicht abgeschnitten werden. */
   overflow: visible;
 }
+/* Trägt Hintergrund + obere Kante getrennt vom Inhalt, damit der
+   Masken-Ausschnitt nicht auch Icons/Schrift durchlöchert. */
+.bottom-nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  mask-image: radial-gradient(circle 29px at 50% 0px, transparent 28px, black 30px);
+  -webkit-mask-image: radial-gradient(circle 29px at 50% 0px, transparent 28px, black 30px);
+  z-index: 0;
+}
 
 .bn-btn {
   position: relative;
+  z-index: 1;
   flex: 1 1 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   height: 100%;
   border: none;
   background: none;
@@ -1657,14 +1676,13 @@ main {
   cursor: pointer;
   transition: color .15s ease;
 }
-.bn-btn svg { width: 22px; height: 22px; }
-.bn-label { font-size: .68rem; font-weight: 600; }
+.bn-btn svg { width: 25px; height: 25px; }
+.bn-label { font-size: .74rem; font-weight: 650; }
 .bn-btn:hover { color: var(--ink); }
 .bn-btn.active { color: var(--accent); }
 
-/* ideen-backlog.md #28: Fußleiste etwas größer, Icons je Rubrik in deren
-   Akzentfarbe statt einheitlich grau, "Start" etwas größer/prominenter
-   als die übrigen Einträge. Farben lehnen sich an die schon vorhandenen
+/* ideen-backlog.md #28: Icons je Rubrik in deren Akzentfarbe statt
+   einheitlich grau. Farben lehnen sich an die schon vorhandenen
    Typ-Akzentfarben an (--c-termin/--c-beteiligung/--c-datei) — "Mehr" hat
    keine eigene Kartenfarbe und bleibt bewusst neutral. */
 .bn-btn[data-view="termine"] { color: var(--c-termin); }
@@ -1679,38 +1697,32 @@ main {
 .bn-btn[data-view="termine"]:hover,
 .bn-btn[data-view="beteiligung"]:hover,
 .bn-btn[data-view="dateien"]:hover { opacity: 1; }
-/* Nutzerwunsch 11.09.2026: Start deutlich größer als die übrigen Einträge
-   (Icon+Wort), das Icon sitzt in einem Kreis, der halb über die obere
-   Kante der Leiste hinausragt und diese optisch fortsetzt — der Kreis-
-   rand hat dieselbe Farbe/Stärke wie border-top der Leiste und liegt
-   davor (z-index), dadurch wirkt die Linie wie um den Kreis herumgeführt. */
-/* .bn-start-bump ist absolut positioniert (ragt aus dem normalen Fluss
-   heraus), im Fluss bleibt nur noch das Wort darunter — deshalb wird der
-   Button-Inhalt nach unten statt mittig ausgerichtet. */
-.bn-btn-start {
-  overflow: visible;
-  justify-content: flex-end;
-  padding-bottom: 8px;
-}
+
+/* Start: gefüllter Kreis in Akzentfarbe, sitzt im Notch der Leiste
+   (.bottom-nav::before) und ragt gut sichtbar darüber hinaus — der
+   unsichtbare Platzhalter (.bn-start-spacer) hält dieselbe Flex-Höhe wie
+   bei den Nachbar-Buttons, damit "Start" auf derselben Zeile steht wie
+   die anderen Beschriftungen, nicht tiefer. */
+.bn-btn-start { overflow: visible; }
+.bn-start-spacer { width: 25px; height: 25px; }
 .bn-start-bump {
   position: absolute;
-  top: -19px;
+  top: -24px;
   left: 50%;
   transform: translateX(-50%);
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: var(--card);
-  border: 1.5px solid var(--line);
+  background: var(--accent);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
-  transition: border-color .15s ease;
+  z-index: 2;
+  box-shadow: 0 6px 14px -4px rgba(38, 28, 12, .4);
 }
-.bn-btn-start.active .bn-start-bump { border-color: var(--accent); }
-.bn-start-bump svg { width: 26px; height: 26px; }
-.bn-btn-start .bn-label { font-size: .78rem; font-weight: 800; }
+.bn-start-bump svg { width: 27px; height: 27px; }
+.bn-btn-start .bn-label { color: var(--accent); font-size: .8rem; font-weight: 800; }
 
 /* Sitzt seit ideen-backlog.md #17 fest oben in der Kopfzeile neben der
    Glocke (.brand-actions) statt über der Fußleiste zu schweben — kleiner
