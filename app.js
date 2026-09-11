@@ -1681,17 +1681,17 @@ function renderStundenplanTable() {
     return `
       <tr>
         <td class="stundenplan-time">${esc(fmtTime(first?.start_time))}<br>${esc(fmtTime(first?.end_time))}</td>
-        ${[1, 2, 3, 4, 5].map((wd) => `<td>${cells[wd] ? esc(cells[wd].subject) + (cells[wd].room ? `<br><span class="stundenplan-room">${esc(cells[wd].room)}</span>` : "") : "—"}</td>`).join("")}
+        ${[1, 2, 3, 4, 5].map((wd) => cells[wd]
+          ? `<td>${esc(cells[wd].subject)}${cells[wd].room ? `<br><span class="stundenplan-room">${esc(cells[wd].room)}</span>` : ""}</td>`
+          : `<td class="stundenplan-empty">–</td>`).join("")}
       </tr>`;
   }).join("");
 
   return `
-    <div class="table-scroll">
-      <table class="sched-table stundenplan-table">
-        <thead><tr><th></th>${WEEKDAY_SHORT.slice(1, 6).map((w) => `<th>${w}</th>`).join("")}</tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+    <table class="stundenplan-table">
+      <thead><tr><th></th>${WEEKDAY_SHORT.slice(1, 6).map((w) => `<th>${w}</th>`).join("")}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 function renderStundenplanView() {

@@ -1318,21 +1318,55 @@ main {
 .sched-nachmittag-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .sched-nachmittag-toggle input { width: 15px; height: 15px; }
 
-/* Stundenplan-Ansicht (rein lesend, alle Nutzer, siehe renderStundenplanView) */
+/* Stundenplan-Ansicht (rein lesend, alle Nutzer, siehe renderStundenplanView).
+   Bewusst KEIN .table-scroll/min-width wie beim Editor: hier soll der
+   ganze Plan ohne seitliches Scrollen auf einen Blick passen, auch auf
+   schmalen Handy-Bildschirmen — also feste, gleich breite Spalten
+   (table-layout: fixed) statt Inhalt-abhängiger Breite. */
+.stundenplan-table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+}
 .stundenplan-table td, .stundenplan-table th {
   text-align: center;
-  padding: 10px 6px;
+  padding: 7px 2px;
   border-bottom: 1px solid var(--line-soft);
-  font-size: .85rem;
+  font-size: .74rem;
+  line-height: 1.2;
+  /* lange Fachnamen ("Abschlussstunde", "Handarbeit") sollen möglichst an
+     Silbengrenzen umbrechen statt mitten im Wort — hyphens:auto reicht
+     dafür allein nicht (bricht ohne Wrap-Erlaubnis gar nicht um), daher
+     zusätzlich overflow-wrap: break-word als Absicherung. */
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
-.stundenplan-table th { border-bottom: 1px solid var(--line); }
+.stundenplan-table th {
+  border-bottom: 1px solid var(--line);
+  font-weight: 700;
+  font-size: .68rem;
+  color: var(--muted);
+  padding-bottom: 6px;
+  hyphens: none;
+}
+.stundenplan-table th:first-child { width: 17%; }
 .stundenplan-time {
   font-weight: 700;
   color: var(--muted);
-  font-size: .75rem !important;
+  font-size: .62rem !important;
   white-space: nowrap;
+  hyphens: none;
 }
-.stundenplan-room { color: var(--muted); font-size: .78rem; }
+.stundenplan-room { color: var(--muted); font-size: .64rem; hyphens: none; }
+.stundenplan-table td.stundenplan-empty { color: var(--line); }
+
+@media (max-width: 380px) {
+  .stundenplan-table td, .stundenplan-table th { padding: 6px 1px; font-size: .68rem; }
+  .stundenplan-time { font-size: .58rem !important; }
+  .stundenplan-room { font-size: .58rem; }
+}
 
 /* Listen */
 .items { list-style: none; margin: 0 0 8px; padding: 0; }
