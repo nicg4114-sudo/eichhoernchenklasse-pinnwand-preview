@@ -242,6 +242,7 @@ const elFab = $("fab");
 const elMain = document.querySelector("main");
 const elScrollTopBtn = $("scrollTopBtn");
 const elClassSelect = $("classSelect");
+const elClassLockedLabel = $("classLockedLabel");
 const elBrandTitle = $("brandTitle");
 const elViewTabs = $("viewTabs");
 const dlgType = $("dlgType");
@@ -256,6 +257,9 @@ const elAdminBtn = $("moreAdminBtn");
 const elAdminBtnLabel = $("moreAdminBtnLabel");
 const elArchivBtn = $("moreArchivBtn");
 const elPapierkorbBtn = $("morePapierkorbBtn");
+const elFeedbackBtn = $("moreFeedbackBtn");
+const elFeedbackAdminBtn = $("moreFeedbackAdminBtn");
+const dlgFeedback = $("dlgFeedback");
 const dlgKalenderAdmin = $("dlgKalenderAdmin");
 const elKalAdminBody = $("kalAdminBody");
 const dlgSearch = $("dlgSearch");
@@ -483,7 +487,7 @@ function toast(msg, isError = false) {
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgSearch, dlgSplash].some((d) => d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgFeedback, dlgSearch, dlgSplash].some((d) => d.open);
 }
 
 /* ---------- API ---------- */
@@ -584,16 +588,23 @@ function inActiveClass(c) {
 function renderClassSelect() {
   if (!elClassSelect) return;
   if (classLocked) {
+    // Nutzerwunsch 12.09.2026: kein <select> mehr, auch nicht deaktiviert —
+    // ein Dropdown-Symbol würde weiterhin einen möglichen Wechsel
+    // suggerieren. Stattdessen reiner, nicht anklickbarer Text.
     const cls = classesList.find((c) => c.id === activeClassId);
-    elClassSelect.innerHTML = cls
-      ? `<option value="${cls.id}">${CLASS_ICON[cls.slug] || ""} ${esc(cls.name)}</option>`
-      : `<option value="">Beide Klassen</option>`;
-    elClassSelect.value = activeClassId;
-    elClassSelect.disabled = true;
-    elClassSelect.title = "Über einen eigenen Link für diese Klasse geöffnet.";
+    elClassSelect.hidden = true;
+    if (elClassLockedLabel) {
+      elClassLockedLabel.hidden = false;
+      elClassLockedLabel.textContent = cls
+        ? `${CLASS_ICON[cls.slug] || ""} ${cls.name}`
+        : "Beide Klassen";
+      elClassLockedLabel.title = "Über einen eigenen Link für diese Klasse geöffnet.";
+    }
     updateBrandTitle();
     return;
   }
+  elClassSelect.hidden = false;
+  if (elClassLockedLabel) elClassLockedLabel.hidden = true;
   const opts = [`<option value="">Beide Klassen</option>`].concat(
     classesList.map((cl) =>
       `<option value="${cl.id}">${CLASS_ICON[cl.slug] || ""} ${esc(cl.name)}</option>`));
@@ -620,6 +631,7 @@ const ADMIN_CODE_RPCS = new Set([
   "delete_folder", "set_schedule", "create_recurring_event",
   "update_recurring_event", "delete_recurring_event", "set_school_holidays",
   "add_poll_option", "update_poll_option", "delete_poll_option",
+  "list_feedback", "mark_feedback_read",
 ]);
 
 async function rpc(name, args = {}) {
@@ -1145,6 +1157,7 @@ function renderStart(list) {
   // über diesen Reiter — die Kalender-Kachel führt direkt in den Kalender,
   // ohne Zwischenmenü.
   return statsLineHtml(list)
+    + `<p class="dash-section-label">Hier steht alles Aktuelles:</p>`
     + renderHinweisCarousel(hinweise)
     + renderStundenplanStrip()
     + renderTerminAufgabenRow(termine, list);
@@ -1165,8 +1178,8 @@ function ortsname() {
 // Rubriken (Kalender, Termine, …) in eine eigene Ansicht.
 function renderStundenplanStrip() {
   return `
-    <button type="button" class="willkommen willkommen-nav" data-action="open-rubrik" data-type="stundenplan">
-      <span class="willkommen-title">${ICONS.kalender}Stundenplan</span>
+    <button type="button" class="willkommen willkommen-nav willkommen-stundenplan" data-action="open-rubrik" data-type="stundenplan">
+      <span class="willkommen-title">${ICONS.kalender}Zum Stundenplan</span>
       <span class="willkommen-chevron">${ICONS.chevron}</span>
     </button>`;
 }
@@ -1523,6 +1536,17 @@ function shortenTitle(title, max = 12) {
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
+// ISO-8601-Kalenderwoche (Woche 1 enthält den ersten Donnerstag des Jahres)
+// — reine Berechnung, kein Datenbankzugriff nötig. Nutzerwunsch 12.09.2026:
+// Wochennummer links neben jeder Kalenderzeile.
+function isoWeekNumber(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
 function renderKalenderMonth() {
   const month = calendarMonth || (calendarMonth = (() => { const t = todayStart(); t.setDate(1); return t; })());
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -1531,41 +1555,71 @@ function renderKalenderMonth() {
   gridStart.setDate(gridStart.getDate() - startOffset);
   const today = toISODate(todayStart());
 
-  let cells = "";
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(gridStart);
-    d.setDate(gridStart.getDate() + i);
-    const dateStr = toISODate(d);
-    const weekday = isoWeekday(d);
-    const inMonth = d.getMonth() === month.getMonth();
-    const holiday = holidayForDate(dateStr);
-    const cls = [
-      "cal-day",
-      inMonth ? "" : "outside",
-      dateStr === today ? "is-today" : "",
-      holiday ? "is-holiday" : "",
-    ].filter(Boolean).join(" ");
-    // Nutzerwunsch 11.09.2026: statt nur eines Punkts steht ein kurzer
-    // Titel-Ausschnitt direkt in der Tageszelle ("Schlagwort"), damit auf
-    // einen Blick erkennbar ist, WAS an dem Tag ansteht, nicht nur DASS
-    // etwas ansteht — dichter am Google-Kalender-Gefühl. Wiederkehrende
-    // Ereignisse bleiben ein schlanker Punkt (kein festes Datum, jede
-    // Woche gleich, bräuchten sonst zu viel Platz in jeder Zelle).
-    const dayTermine = holiday ? [] : termineForDate(dateStr);
-    const recurring = holiday ? [] : recurringForDate(dateStr, weekday);
-    const chips = dayTermine.slice(0, 2).map((t) =>
-      `<span class="cal-day-chip">${esc(shortenTitle(t.title))}</span>`).join("");
-    const more = dayTermine.length > 2
-      ? `<span class="cal-day-chip cal-day-chip-more">+${dayTermine.length - 2}</span>` : "";
-    cells += `
-      <button type="button" class="${cls}" data-action="cal-day" data-date="${dateStr}" title="${holiday ? esc(holiday.label) : ""}">
-        <span class="cal-day-num">${d.getDate()}</span>
-        ${chips || more ? `<span class="cal-day-chips">${chips}${more}</span>` : ""}
-        ${recurring.length ? `<span class="cal-day-dot cal-day-dot-recurring" title="Wiederkehrendes Ereignis"></span>` : ""}
-      </button>`;
-    // Nach dem letzten Tag des Monats nicht unnötig eine ganze weitere,
-    // komplett leere Woche anhängen.
-    if (i >= 34 && d.getMonth() !== month.getMonth() && (i + 1) % 7 === 0) break;
+  // Nutzerwunsch 12.09.2026: statt eines einzigen durchgehenden Rasters
+  // jetzt eine eigene Zeile pro Kalenderwoche — dadurch kann jede Zeile
+  // einen abwechselnden Hintergrund (bessere Lesbarkeit) und eine eigene
+  // Wochennummer bekommen, und ein zusammenhängender Ferienzeitraum lässt
+  // sich als durchgehender Balken über die Zeile zeichnen statt einzelner
+  // ausgegrauter Kästchen mit Lücken.
+  let weekRows = "";
+  let dayCount = 0;
+  outer:
+  for (let week = 0; week < 6; week++) {
+    let weekCells = "";
+    let weekNum = null;
+    for (let wd = 0; wd < 7; wd++) {
+      const i = week * 7 + wd;
+      const d = new Date(gridStart);
+      d.setDate(gridStart.getDate() + i);
+      const dateStr = toISODate(d);
+      const weekday = isoWeekday(d);
+      if (weekNum === null) weekNum = isoWeekNumber(d);
+      const inMonth = d.getMonth() === month.getMonth();
+      const holiday = holidayForDate(dateStr);
+      // Für den durchgehenden Ferienbalken: gehört der Vortag/Folgetag
+      // (innerhalb derselben Woche) ebenfalls zum selben Ferienzeitraum?
+      const holidayPrev = wd > 0 && holiday
+        ? holidayForDate(toISODate(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1))) === holiday
+        : false;
+      const holidayNext = wd < 6 && holiday
+        ? holidayForDate(toISODate(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1))) === holiday
+        : false;
+      const cls = [
+        "cal-day",
+        inMonth ? "" : "outside",
+        dateStr === today ? "is-today" : "",
+        holiday ? "is-holiday" : "",
+        holiday && !holidayPrev ? "is-holiday-start" : "",
+        holiday && !holidayNext ? "is-holiday-end" : "",
+      ].filter(Boolean).join(" ");
+      // Nutzerwunsch 11.09.2026: statt nur eines Punkts steht ein kurzer
+      // Titel-Ausschnitt direkt in der Tageszelle ("Schlagwort"), damit auf
+      // einen Blick erkennbar ist, WAS an dem Tag ansteht, nicht nur DASS
+      // etwas ansteht — dichter am Google-Kalender-Gefühl. Wiederkehrende
+      // Ereignisse bleiben ein schlanker Punkt (kein festes Datum, jede
+      // Woche gleich, bräuchten sonst zu viel Platz in jeder Zelle).
+      const dayTermine = holiday ? [] : termineForDate(dateStr);
+      const recurring = holiday ? [] : recurringForDate(dateStr, weekday);
+      const chips = dayTermine.slice(0, 2).map((t) =>
+        `<span class="cal-day-chip">${esc(shortenTitle(t.title))}</span>`).join("");
+      const more = dayTermine.length > 2
+        ? `<span class="cal-day-chip cal-day-chip-more">+${dayTermine.length - 2}</span>` : "";
+      weekCells += `
+        <button type="button" class="${cls}" data-action="cal-day" data-date="${dateStr}" title="${holiday ? esc(holiday.label) : ""}">
+          <span class="cal-day-num">${d.getDate()}</span>
+          ${chips || more ? `<span class="cal-day-chips">${chips}${more}</span>` : ""}
+          ${recurring.length ? `<span class="cal-day-dot cal-day-dot-recurring" title="Wiederkehrendes Ereignis"></span>` : ""}
+        </button>`;
+      dayCount++;
+      // Nach dem letzten Tag des Monats nicht unnötig eine ganze weitere,
+      // komplett leere Woche anhängen.
+      if (dayCount >= 35 && d.getMonth() !== month.getMonth() && wd === 6) break outer;
+    }
+    weekRows += `
+      <div class="cal-week-row ${week % 2 === 0 ? "cal-week-dark" : "cal-week-light"}">
+        <span class="cal-week-num">${weekNum}</span>
+        <div class="cal-week-days">${weekCells}</div>
+      </div>`;
   }
 
   return `
@@ -1574,8 +1628,8 @@ function renderKalenderMonth() {
       <b>${month.toLocaleDateString("de-DE", { month: "long", year: "numeric" })}</b>
       <button type="button" class="icon-btn" data-action="cal-next" aria-label="Nächster Monat">${ICONS.chevron}</button>
     </div>
-    <div class="cal-weekdays">${WEEKDAY_SHORT.slice(1).map((w) => `<span>${w}</span>`).join("")}</div>
-    <div class="cal-grid">${cells}</div>`;
+    <div class="cal-weekdays"><span class="cal-week-num-spacer"></span><div class="cal-week-days">${WEEKDAY_SHORT.slice(1).map((w) => `<span>${w}</span>`).join("")}</div></div>
+    <div class="cal-grid" id="calGrid">${weekRows}</div>`;
 }
 
 // Nutzerwunsch 11.09.2026: Kalender und Termin-Rubrik gehören zusammen —
@@ -1652,6 +1706,29 @@ function wireKalender() {
     calendarMonth.setMonth(calendarMonth.getMonth() + 1);
     render();
   });
+
+  // Nutzerwunsch 12.09.2026: Monat auch per Wisch-Geste wechseln, nicht nur
+  // über die Pfeil-Knöpfe — Schwellenwert 40px waagerecht und deutlich mehr
+  // waagerecht als senkrecht, damit normales Scrollen der Seite nicht
+  // versehentlich als Wisch gewertet wird.
+  const calGrid = elFeed.querySelector("#calGrid");
+  if (calGrid) {
+    let startX = 0, startY = 0, tracking = false;
+    calGrid.addEventListener("touchstart", (ev) => {
+      const t = ev.touches[0];
+      startX = t.clientX; startY = t.clientY; tracking = true;
+    }, { passive: true });
+    calGrid.addEventListener("touchend", (ev) => {
+      if (!tracking) return;
+      tracking = false;
+      const t = ev.changedTouches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      calendarMonth.setMonth(calendarMonth.getMonth() + (dx < 0 ? 1 : -1));
+      render();
+    }, { passive: true });
+  }
 }
 
 /* ---------- Stundenplan-Ansicht (eigenständige Rubrik) ------------------ */
@@ -1740,6 +1817,50 @@ function renderKalAdminHome() {
     if (btn.dataset.admin === "schedule") renderKalAdminSchedule();
     else if (btn.dataset.admin === "recurring") renderKalAdminRecurring();
     else renderKalAdminHolidays();
+  }));
+}
+
+/* ---------- Eltern-Feedback (Nutzerwunsch 12.09.2026, migration-023) ----- */
+
+const elFeedbackBody = $("feedbackBody");
+
+async function openFeedbackDialog() {
+  elFeedbackBody.innerHTML = `<p class="rubrik-panel-empty">Lädt…</p>`;
+  dlgFeedback.showModal();
+  let entries = [];
+  try {
+    entries = await rpc("list_feedback", {});
+  } catch (err) {
+    elFeedbackBody.innerHTML = `<p class="rubrik-panel-empty">${esc(err.message || "Laden fehlgeschlagen.")}</p>`;
+    return;
+  }
+  renderFeedbackList(entries);
+}
+
+function renderFeedbackList(entries) {
+  if (!entries.length) {
+    elFeedbackBody.innerHTML = `<p class="rubrik-panel-empty">Noch kein Feedback eingegangen.</p>`;
+    return;
+  }
+  elFeedbackBody.innerHTML = entries.map((f) => {
+    const cls = classesList.find((c) => c.id === f.class_id);
+    return `
+      <div class="feedback-item ${f.read_at ? "" : "is-unread"}" data-id="${f.id}">
+        <div class="feedback-item-head">
+          <b>${esc(f.sender_name)}</b>
+          ${cls ? `<span class="class-chip">${CLASS_ICON[cls.slug] || ""} ${esc(cls.name)}</span>` : ""}
+          ${!f.read_at ? `<span class="feedback-dot" title="Neu"></span>` : ""}
+        </div>
+        <p class="feedback-item-message">${esc(f.message)}</p>
+        <span class="feedback-item-date">${fmtTimestamp(f.created_at)}</span>
+      </div>`;
+  }).join("");
+  elFeedbackBody.querySelectorAll(".feedback-item.is-unread").forEach((el) => el.addEventListener("click", async () => {
+    try {
+      await rpc("mark_feedback_read", { p_id: el.dataset.id });
+      el.classList.remove("is-unread");
+      el.querySelector(".feedback-dot")?.remove();
+    } catch { /* nicht kritisch, Markierung als gelesen kann beim nächsten Öffnen erneut versucht werden */ }
   }));
 }
 
@@ -2376,6 +2497,10 @@ function promptDlg(title, fields) {
       ? `<select name="${esc(f.name)}" ${i === 0 ? "autofocus" : ""}>${f.options
           .map((o) => `<option value="${esc(o.value)}" ${o.value === f.value ? "selected" : ""}>${esc(o.label)}</option>`)
           .join("")}</select>`
+      : f.type === "textarea"
+      ? `<textarea name="${esc(f.name)}" placeholder="${esc(f.placeholder || "")}"
+              maxlength="${f.maxlength || 2000}" rows="4"
+              ${f.optional ? "" : "required"} ${i === 0 ? "autofocus" : ""}>${esc(f.value || "")}</textarea>`
       : `<input type="${f.type || "text"}" name="${esc(f.name)}" placeholder="${esc(f.placeholder || "")}"
               maxlength="${f.maxlength || 200}" value="${esc(f.value || "")}"
               ${f.optional ? "" : "required"} ${i === 0 ? "autofocus" : ""}>`)).join("");
@@ -3607,12 +3732,42 @@ async function init() {
       // nicht nur ungeschrieben-lassen (Nutzerwunsch 11.09.2026).
       if (elArchivBtn) elArchivBtn.hidden = !isAdmin();
       if (elPapierkorbBtn) elPapierkorbBtn.hidden = !isAdmin();
+      // "Feedback der Eltern" (Liste ansehen) nur für Admins, "Feedback an
+      // die Klassenleitung" (Absenden) für alle (Nutzerwunsch 12.09.2026).
+      if (elFeedbackAdminBtn) elFeedbackAdminBtn.hidden = !isAdmin();
       dlgMore.showModal();
     });
     dlgMore.addEventListener("click", (ev) => {
       const item = ev.target.closest(".more-item[data-view]");
       if (item) { view = item.dataset.view; render(); }
       if (ev.target.closest("[data-close]")) dlgMore.close();
+    });
+  }
+
+  // Eltern-Feedback (Nutzerwunsch 12.09.2026, migration-023).
+  if (elFeedbackBtn) {
+    elFeedbackBtn.addEventListener("click", async () => {
+      const vals = await promptDlg("Feedback an die Klassenleitung", [
+        { name: "name", label: "Dein Name", maxlength: 80 },
+        { name: "message", label: "Deine Nachricht", type: "textarea", maxlength: 2000 },
+      ]);
+      if (!vals) return;
+      try {
+        await rpc("send_feedback", {
+          p_class_id: activeClassId || null,
+          p_sender_name: vals.name,
+          p_message: vals.message,
+        });
+        toast("Danke, deine Nachricht ist angekommen.");
+      } catch (err) {
+        toast(err.message || "Senden fehlgeschlagen.");
+      }
+    });
+  }
+  if (elFeedbackAdminBtn && dlgFeedback) {
+    elFeedbackAdminBtn.addEventListener("click", openFeedbackDialog);
+    dlgFeedback.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-close]")) dlgFeedback.close();
     });
   }
 

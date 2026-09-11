@@ -93,9 +93,9 @@
    funktionalen Typ-Farben einzelner Kartenarten (Termin/Liste/etc.), die
    weiterhin unverändert zur Unterscheidung dienen. */
 :root.theme-schmetterling {
-  --accent:    #4d80ad;
-  --accent-dk: #3a6389;
-  --accent-bg: #e8f1f8;
+  --accent:    #6fa8d6;
+  --accent-dk: #4d80ad;
+  --accent-bg: #eef6fb;
 }
 
 * { box-sizing: border-box; }
@@ -185,6 +185,11 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
 /* Über einen Klassen-Link geöffnet: fest auf eine Klasse gesperrt (siehe
    applyClassLink in app.js) — bewusst weiterhin gut lesbar statt komplett
    ausgegraut, nur ohne Dropdown-Pfeil-Cursor. */
+.class-locked-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: default;
+}
 .class-select:disabled {
   opacity: 1;
   color: var(--ink);
@@ -454,6 +459,20 @@ main {
   color: inherit;
 }
 .willkommen-nav .willkommen-chevron svg { transform: rotate(0deg); }
+/* Nutzerwunsch 12.09.2026: Stundenplan-Reiter soll auf dem Dashboard
+   sofort als eigener, wichtiger Reiter auffallen statt wie ein neutrales
+   Info-Banner zu wirken — dezent eingefärbter Hintergrund/Rand in der
+   Termin-Farbe (der Stundenplan ist ja terminnah), Titel/Chevron in
+   derselben Farbe statt Standard-Textfarbe. */
+.willkommen-stundenplan {
+  background: color-mix(in srgb, var(--c-termin) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-termin) 28%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.willkommen-stundenplan .willkommen-title,
+.willkommen-stundenplan .willkommen-chevron { color: var(--c-termin); }
+.willkommen-stundenplan .willkommen-title svg { color: var(--c-termin); }
 .willkommen-body-inner { overflow: hidden; min-height: 0; }
 .willkommen.collapsed .willkommen-body { grid-template-rows: 0fr; }
 .willkommen-sub { font-size: .82rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
@@ -1184,17 +1203,46 @@ main {
 .cal-head b { text-transform: capitalize; }
 .cal-head .icon-btn svg { width: 18px; height: 18px; display: block; }
 .cal-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  display: flex;
+  align-items: center;
+  gap: 4px;
   text-align: center;
   font-size: .72rem;
   color: var(--muted);
   margin-bottom: 4px;
 }
-.cal-grid {
+.cal-weekdays .cal-week-days { display: grid; grid-template-columns: repeat(7, 1fr); flex: 1; }
+.cal-week-num-spacer { width: 20px; flex: 0 0 auto; }
+.cal-grid { display: flex; flex-direction: column; gap: 2px; touch-action: pan-y; }
+/* Nutzerwunsch 12.09.2026: eine Zeile pro Kalenderwoche statt eines
+   durchgehenden Rasters — dadurch abwechselnd heller/dunkler Hintergrund
+   (bessere Lesbarkeit der Wochen) und eine Wochennummer links, plus
+   Grundlage für den durchgehenden Ferienbalken (siehe .is-holiday-*). */
+.cal-week-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border-radius: 8px;
+  padding: 1px 0;
+}
+.cal-week-dark { background: var(--bg); }
+.cal-week-light { background: transparent; }
+.cal-week-num {
+  width: 20px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .62rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.cal-week-days {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 /* Nutzerwunsch 11.09.2026: Tageszellen sind jetzt hoch genug für kurze
    Termin-Schlagwörter statt nur eines Punkts — Kalender und Termin-Liste
@@ -1223,7 +1271,25 @@ main {
   font-weight: 800;
   color: var(--accent-dk);
 }
-.cal-day.is-holiday { color: var(--muted); text-decoration: line-through; }
+/* Nutzerwunsch 12.09.2026: Ferien nicht mehr als einzelne durchgestrichene
+   Kästchen mit Lücken dazwischen, sondern als durchgehender ausgegrauter
+   Balken über zusammenhängende Ferientage — der Balken wächst per
+   negativem Margin in die Zellenlücke hinein (siehe --gap, entspricht
+   dem gap-Wert von .cal-week-days) und bekommt an Anfang/Ende des
+   Zeitraums abgerundete Ecken, dazwischen eckig, damit er optisch
+   durchgehend wirkt. */
+.cal-day.is-holiday {
+  --gap: 2px;
+  color: var(--muted);
+  background: var(--line-soft);
+  border-radius: 0;
+  margin-left: calc(var(--gap) * -1);
+  margin-right: calc(var(--gap) * -1);
+  z-index: 1;
+}
+.cal-day.is-holiday-start { margin-left: 0; border-radius: 8px 0 0 8px; }
+.cal-day.is-holiday-end { margin-right: 0; border-radius: 0 8px 8px 0; }
+.cal-day.is-holiday-start.is-holiday-end { border-radius: 8px; }
 .cal-day-num { font-size: .85rem; flex: 0 0 auto; }
 .cal-day-chips {
   display: flex;
@@ -1857,6 +1923,15 @@ main {
 }
 .more-item:hover { background: var(--bg); }
 .more-item svg { width: 20px; height: 20px; flex: 0 0 auto; color: var(--muted); }
+
+/* Eltern-Feedback, Admin-Ansicht (siehe #dlgFeedback, renderFeedbackList). */
+.feedback-item { padding: 12px 0; border-top: 1px solid var(--line); }
+.feedback-item:first-child { border-top: none; padding-top: 0; }
+.feedback-item-head { display: flex; align-items: center; gap: 8px; }
+.feedback-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--important); flex: 0 0 auto; }
+.feedback-item-message { margin: 6px 0; white-space: pre-wrap; }
+.feedback-item-date { font-size: .78rem; color: var(--muted); }
+.feedback-item.is-unread { cursor: pointer; }
 
 /* Versionshinweise (siehe #dlgVersion) — neueste zuerst, mit Datum. */
 .version-list { max-height: 60vh; overflow-y: auto; }

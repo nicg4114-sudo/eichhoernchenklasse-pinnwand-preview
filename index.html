@@ -32,6 +32,10 @@
       </div>
     </div>
     <select id="classSelect" class="class-select" aria-label="Klasse wählen"></select>
+    <!-- Nutzerwunsch 12.09.2026: bei Klassen-Link (classLocked) komplett
+         unsichtbares <select> statt nur deaktiviert — kein Dropdown-Symbol
+         mehr, das einen möglichen Wechsel suggeriert (siehe renderClassSelect). -->
+    <span id="classLockedLabel" class="class-select class-locked-label" hidden></span>
   </div>
 </header>
 
@@ -100,6 +104,17 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.25"/><path d="M6.6 10.2l2.2 2.2 4.6-4.8"/></svg>
       Version — was ist neu?
     </button>
+    <!-- Nutzerwunsch 12.09.2026: für alle Nutzer sichtbar — jeder darf
+         Feedback schicken, auch ohne Admin-Zugang (siehe migration-023). -->
+    <button class="more-item" id="moreFeedbackBtn" type="button" data-close>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h13v8h-6.5L6 16.5v-3h-2.5z"/></svg>
+      Feedback an die Klassenleitung
+    </button>
+    <!-- Nur für Admins sichtbar (per JS ausgeblendet, siehe moreFeedbackAdminBtn.hidden). -->
+    <button class="more-item" id="moreFeedbackAdminBtn" type="button" data-close>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h13v8h-6.5L6 16.5v-3h-2.5z"/></svg>
+      Feedback der Eltern
+    </button>
     <!-- ideen-backlog.md #19: nur am Hauptlink sichtbar (per JS ausgeblendet
          bei Klassen-Link), Beschriftung/Wirkung je nach Admin-Status per JS. -->
     <button class="more-item" id="moreAdminBtn" type="button" data-close>
@@ -166,6 +181,17 @@
      Inhalt wird komplett von app.js erzeugt (renderKalAdmin*). -->
 <dialog id="dlgKalenderAdmin" class="dlg">
   <div id="kalAdminBody"></div>
+</dialog>
+
+<!-- Eltern-Feedback (Nutzerwunsch 12.09.2026, migration-023): Admin-Ansicht
+     aller eingegangenen Nachrichten, Inhalt kommt von app.js
+     (renderFeedbackList). -->
+<dialog id="dlgFeedback" class="dlg">
+  <h2>Feedback der Eltern</h2>
+  <div id="feedbackBody"></div>
+  <div class="dlg-actions">
+    <button type="button" class="btn ghost" data-close>Schließen</button>
+  </div>
 </dialog>
 
 <!-- Suche (ideen-backlog.md #24): durchsucht Titel/Text aller sichtbaren
