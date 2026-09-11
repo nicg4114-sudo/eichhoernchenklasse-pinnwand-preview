@@ -1297,13 +1297,10 @@ function renderTerminAufgabenRow(termine, list) {
       </button>`;
   }
 
-  const kalenderTile = `
-    <button class="dash-tile dash-tile-kalender" data-action="open-rubrik" data-type="kalender">
-      ${ICONS.kalender}
-      <span class="dash-tile-kalender-label">Kalender</span>
-    </button>`;
-
-  const tiles = [terminTile, aufgabenTile, umfrageTile, kalenderTile].filter(Boolean);
+  // Nutzerwunsch 11.09.2026: eigene Kalender-Kachel entfällt — ihr Symbol
+  // sitzt jetzt direkt am "Termin"-Knopf in der Fußleiste (Kalender und
+  // Termin sind dieselbe Rubrik, siehe renderKalenderView).
+  const tiles = [terminTile, aufgabenTile, umfrageTile].filter(Boolean);
   return `<div class="dash-tile-row count-${tiles.length}">${tiles.join("")}</div>`;
 }
 
@@ -3179,9 +3176,6 @@ async function handleFeedClick(ev) {
         }
       } else if (type === "beteiligung") {
         view = "beteiligung";
-      } else if (type === "kalender") {
-        view = "kalender";
-        calendarMonth = null;
       } else if (type === "stundenplan") {
         view = "stundenplan";
       } else if (type === "aufgaben") {

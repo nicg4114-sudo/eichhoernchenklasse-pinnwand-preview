@@ -47,16 +47,25 @@
      Papierkorb/Version (siehe dlgMore). -->
 <nav class="bottom-nav" id="viewTabs" aria-label="Navigation">
   <button data-view="dashboard" hidden>Dashboard</button>
+  <!-- Nutzerwunsch 11.09.2026: Kalender und Termin sind dieselbe Rubrik
+       (siehe renderKalenderView) — die Dashboard-Kachel "Kalender" ist
+       weggefallen, ihr Symbol (Kalenderblatt mit Termin-Punkt) sitzt
+       jetzt hier. -->
   <button class="bn-btn" data-view="termine" title="Termin" aria-label="Termin">
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4.2" width="14" height="12" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="6.5" y1="2.5" x2="6.5" y2="5.5"/><line x1="13.5" y1="2.5" x2="13.5" y2="5.5"/></svg>
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4.2" width="14" height="12" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="6.5" y1="2.5" x2="6.5" y2="5.5"/><line x1="13.5" y1="2.5" x2="13.5" y2="5.5"/><circle cx="7.3" cy="11.3" r=".9" fill="currentColor" stroke="none"/></svg>
     <span class="bn-label">Termin</span>
   </button>
   <button class="bn-btn" data-view="beteiligung" title="Beteiligung" aria-label="Beteiligung">
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.25"/><path d="M6.6 10.2l2.2 2.2 4.6-4.8"/></svg>
     <span class="bn-label">Beteiligung</span>
   </button>
-  <button class="bn-btn active" data-view="feed" title="Start" aria-label="Start">
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 9.2L10 3.5l6.8 5.7"/><path d="M4.8 8v7.5a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1V8"/></svg>
+  <!-- Nutzerwunsch 11.09.2026: Start deutlich hervorgehoben — das Icon
+       sitzt in einem Kreis, der halb über die obere Kante der Fußleiste
+       ragt und optisch mit deren oberem Strich verbunden ist. -->
+  <button class="bn-btn bn-btn-start active" data-view="feed" title="Start" aria-label="Start">
+    <span class="bn-start-bump">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 9.2L10 3.5l6.8 5.7"/><path d="M4.8 8v7.5a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1V8"/></svg>
+    </span>
     <span class="bn-label">Start</span>
   </button>
   <button class="bn-btn" data-view="dateien" title="Datei" aria-label="Datei">

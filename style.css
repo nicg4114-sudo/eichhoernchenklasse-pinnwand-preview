@@ -72,7 +72,7 @@
      eigene Farbe, damit sie nicht wie eine der drei Einzelfarben wirkt. */
   --c-beteiligung: #7c5980;
   --line-strong: #d8cbb0;
-  --bottom-nav-h: 68px; /* ideen-backlog.md #28: etwas größer als zuvor (60px) */
+  --bottom-nav-h: 76px; /* Nutzerwunsch 11.09.2026: nochmal etwas größer (zuvor 68px, davor 60px) */
   /* Fließende Dashboard-Skalierung nach Bildschirmhöhe (dvh): zwischen
      600px (kleine Handys, z. B. iPhone SE) und 860px (große Handys)
      wandert --dash-scale linear von 0.6 auf 1 — darunter/darüber bleibt
@@ -780,30 +780,6 @@ main {
   opacity: .85;
 }
 .dash-tile-umfrage-count { font-size: .84rem; font-weight: 700; }
-
-.dash-tile-kalender {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  border: none;
-  background: var(--c-datei);
-  color: #fff;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-}
-.dash-tile-kalender svg { width: 20px; height: 20px; flex: 0 0 auto; }
-/* ideen-backlog.md #27: Ohne min-width:0 konnte der Flex-Text nicht unter
-   seine intrinsische Breite schrumpfen — "Stundenplan" (ein zusammen-
-   hängendes Wort ohne Umbruchstelle) lief dadurch auf schmalen
-   Bildschirmen aus der Kachel heraus statt umzubrechen. */
-.dash-tile-kalender-label {
-  font-size: .84rem;
-  font-weight: 700;
-  min-width: 0;
-  overflow-wrap: break-word;
-}
 
 /* Kleines "Aufgabe"-Kennzeichen auf einer normalen Karte, siehe renderCard. */
 .card-aufgabe {
@@ -1661,6 +1637,9 @@ main {
   padding: 0 6px calc(env(safe-area-inset-bottom));
   background: var(--card);
   border-top: 1px solid var(--line);
+  /* Der Start-Kreis (.bn-start-bump) ragt über diese obere Kante hinaus —
+     darf nicht abgeschnitten werden. */
+  overflow: visible;
 }
 
 .bn-btn {
@@ -1700,8 +1679,38 @@ main {
 .bn-btn[data-view="termine"]:hover,
 .bn-btn[data-view="beteiligung"]:hover,
 .bn-btn[data-view="dateien"]:hover { opacity: 1; }
-.bn-btn[data-view="feed"] svg { width: 24px; height: 24px; }
-.bn-btn[data-view="feed"] .bn-label { font-size: .72rem; font-weight: 800; }
+/* Nutzerwunsch 11.09.2026: Start deutlich größer als die übrigen Einträge
+   (Icon+Wort), das Icon sitzt in einem Kreis, der halb über die obere
+   Kante der Leiste hinausragt und diese optisch fortsetzt — der Kreis-
+   rand hat dieselbe Farbe/Stärke wie border-top der Leiste und liegt
+   davor (z-index), dadurch wirkt die Linie wie um den Kreis herumgeführt. */
+/* .bn-start-bump ist absolut positioniert (ragt aus dem normalen Fluss
+   heraus), im Fluss bleibt nur noch das Wort darunter — deshalb wird der
+   Button-Inhalt nach unten statt mittig ausgerichtet. */
+.bn-btn-start {
+  overflow: visible;
+  justify-content: flex-end;
+  padding-bottom: 8px;
+}
+.bn-start-bump {
+  position: absolute;
+  top: -19px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  transition: border-color .15s ease;
+}
+.bn-btn-start.active .bn-start-bump { border-color: var(--accent); }
+.bn-start-bump svg { width: 26px; height: 26px; }
+.bn-btn-start .bn-label { font-size: .78rem; font-weight: 800; }
 
 /* Sitzt seit ideen-backlog.md #17 fest oben in der Kopfzeile neben der
    Glocke (.brand-actions) statt über der Fußleiste zu schweben — kleiner
