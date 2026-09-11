@@ -1511,6 +1511,31 @@ main {
 .poll-opt .row .grow { flex: 1; overflow-wrap: anywhere; }
 .poll-opt .count { color: var(--muted); font-size: .88rem; white-space: nowrap; }
 .poll-opt .mine { color: var(--c-umfrage); font-weight: 700; }
+/* Namen bei namentlicher Umfrage (poll_named), unter der jeweiligen
+   Option. */
+.poll-voters {
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+  font-size: .8rem;
+  color: var(--muted);
+}
+/* Namenseingabe beim Abstimmen einer namentlichen Umfrage — eigene Optik
+   statt .who-input (dort rechtsbündig/grün für "wer hat's erledigt",
+   hier eine normale Texteingabe für den eigenen Namen). */
+.poll-name-input {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font: inherit;
+  font-size: .9rem;
+  margin: 4px 0 2px;
+  transition: border-color .15s ease;
+}
+.poll-name-input:focus { outline: none; border-color: var(--c-umfrage); }
 .poll label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .poll input[type="radio"], .poll input[type="checkbox"] {
   width: 19px; height: 19px;

@@ -189,6 +189,10 @@ function isAdmin() { return !classLocked && !!adminCode; }
 // nächste neue Karte (Lehrkraft/Elternsprecher legen meist mehrere Karten
 // hintereinander an und müssten sonst jedes Mal neu tippen).
 const CREATOR_NAME_KEY = "pinnwand_ersteller_name";
+// Merkt sich den zuletzt beim Abstimmen einer namentlichen Umfrage
+// eingegebenen Namen — eigener Schlüssel statt CREATOR_NAME_KEY, weil
+// hier meist Eltern/Kinder abstimmen, nicht Lehrkraft/Elternsprecher.
+const VOTER_NAME_KEY = "pinnwand_waehler_name";
 const CLASS_ICON = { eichhoernchen: "🐿️", schmetterling: "🦋" };
 // Kurzform für den Begrüßungstext auf dem Dashboard (siehe renderWillkommen)
 // — cls.name allein wäre "Eichhörnchenklasse-Pinnwand", das klingt doppelt.
@@ -834,7 +838,14 @@ function renderUmfrage(c) {
           </div>
         </div>`;
     }
+    // ideen-backlog.md: bei namentlicher Umfrage ist der Name Pflicht,
+    // damit für alle sichtbar wird, wer wie abgestimmt hat — geräteseitig
+    // gemerkt, damit man ihn nicht bei jeder Umfrage neu eintippen muss.
+    const nameField = c.poll_named ? `
+      <input type="text" class="poll-name-input" id="pollNameInput-${c.id}" placeholder="Dein Name *"
+             maxlength="80" value="${esc(localStorage.getItem(VOTER_NAME_KEY) || "")}">` : "";
     html += `</div>
+      ${nameField}
       <div class="poll-foot">
         <button class="btn small primary" data-action="vote-submit" data-card="${c.id}">Abstimmen</button>
         ${myVotes.size ? `<button class="btn link" data-action="vote-retract" data-card="${c.id}">Stimme zurückziehen</button>` : ""}
@@ -846,6 +857,13 @@ function renderUmfrage(c) {
   for (const o of opts) {
     const n = (o.poll_votes || []).length;
     const pct = totalVotes ? Math.round((n / totalVotes) * 100) : 0;
+    // Namentliche Umfrage: wer für diese Option gestimmt hat, steht direkt
+    // darunter (für alle sichtbar, mit dem Nutzer so abgestimmt).
+    const names = c.poll_named
+      ? (o.poll_votes || []).map((v) => v.voter_name).filter(Boolean)
+      : [];
+    const namesLine = names.length
+      ? `<div class="poll-voters">${names.map(esc).join(", ")}</div>` : "";
     html += `
       <div class="poll-opt">
         <div class="bar" style="width:${pct}%"></div>
@@ -853,6 +871,7 @@ function renderUmfrage(c) {
           <span class="grow">${esc(o.label)}${myVotes.has(o.id) ? ` <span class="mine">✓</span>` : ""}</span>
           <span class="count">${n} · ${pct} %</span>
         </div>
+        ${namesLine}
       </div>`;
   }
   html += `</div>
@@ -2507,7 +2526,12 @@ function editorFieldsHtml(type, card) {
       <label class="field-check">
         <input type="checkbox" name="multi_select">
         <span>Mehrfachauswahl erlauben</span>
-      </label>`;
+      </label>
+      <label class="field-check">
+        <input type="checkbox" name="poll_named">
+        <span>Namentliche Abstimmung (Namen der Abstimmenden sind für alle sichtbar) — sonst anonym</span>
+      </label>
+      <p class="field-hint">Gilt nur beim Anlegen, lässt sich danach nicht mehr ändern (verhindert nachträgliches An-/Deanonymisieren bereits abgegebener Stimmen).</p>`;
   }
   if (type === "umfrage" && card) {
     html += `<span class="field" style="margin-bottom:4px"><span style="font-size:.85rem;font-weight:600;color:var(--muted)">Optionen</span></span>
@@ -2893,6 +2917,7 @@ async function submitEditor() {
 
       if (st.type === "umfrage") {
         p.multi_select = fd.get("multi_select") === "on";
+        p.poll_named = fd.get("poll_named") === "on";
         p.options = String(fd.get("options") || "")
           .split("\n").map((s) => s.trim()).filter(Boolean)
           .map((label) => ({ label }));
@@ -3297,9 +3322,17 @@ async function handleFeedClick(ev) {
       const chosen = [...elFeed.querySelectorAll(`input[name="poll-${CSS.escape(cardId)}"]:checked`)]
         .map((i) => i.value);
       if (!chosen.length) { toast("Bitte zuerst eine Option auswählen.", true); break; }
+      const pollCard = cards.find((x) => x.id === cardId);
+      let voterName;
+      if (pollCard && pollCard.poll_named) {
+        voterName = $(`pollNameInput-${cardId}`)?.value.trim() || "";
+        if (!voterName) { toast("Bitte deinen Namen angeben.", true); break; }
+        localStorage.setItem(VOTER_NAME_KEY, voterName);
+      }
       pollEditing.delete(cardId);
       await doAction(() => rpc("cast_vote",
-        { p_card_id: cardId, p_option_ids: chosen, p_device_token: deviceToken }), "Stimme gespeichert.");
+        { p_card_id: cardId, p_option_ids: chosen, p_device_token: deviceToken, p_voter_name: voterName }),
+        "Stimme gespeichert.");
       break;
     }
   }
