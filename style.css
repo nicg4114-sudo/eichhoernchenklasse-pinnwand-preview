@@ -1271,25 +1271,12 @@ main {
   font-weight: 800;
   color: var(--accent-dk);
 }
-/* Nutzerwunsch 12.09.2026: Ferien nicht mehr als einzelne durchgestrichene
-   Kästchen mit Lücken dazwischen, sondern als durchgehender ausgegrauter
-   Balken über zusammenhängende Ferientage — der Balken wächst per
-   negativem Margin in die Zellenlücke hinein (siehe --gap, entspricht
-   dem gap-Wert von .cal-week-days) und bekommt an Anfang/Ende des
-   Zeitraums abgerundete Ecken, dazwischen eckig, damit er optisch
-   durchgehend wirkt. */
-.cal-day.is-holiday {
-  --gap: 2px;
-  color: var(--muted);
-  background: var(--line-soft);
-  border-radius: 0;
-  margin-left: calc(var(--gap) * -1);
-  margin-right: calc(var(--gap) * -1);
-  z-index: 1;
-}
-.cal-day.is-holiday-start { margin-left: 0; border-radius: 8px 0 0 8px; }
-.cal-day.is-holiday-end { margin-right: 0; border-radius: 0 8px 8px 0; }
-.cal-day.is-holiday-start.is-holiday-end { border-radius: 8px; }
+/* Nutzerwunsch 12.09.2026: Rückmeldung nach kurzem Test des durchgehenden
+   Ferienbalkens (grauer Balken über zusammenhängende Ferientage) — wieder
+   zurück auf einzelne durchgestrichene Tage, wie es vor diesem Versuch
+   war. Die is-holiday-start/-end-Klassen bleiben im Rendering (app.js)
+   ungenutzt für die Optik, schaden aber nicht. */
+.cal-day.is-holiday { color: var(--muted); text-decoration: line-through; }
 .cal-day-num { font-size: .85rem; flex: 0 0 auto; }
 .cal-day-chips {
   display: flex;
@@ -1904,9 +1891,17 @@ main {
 .type-grid b { display: block; margin-bottom: 2px; }
 .type-grid span { font-size: .82rem; color: var(--muted); }
 
-/* "Mehr"-Menü (#dlgMore, ideen-backlog.md #17): Archiv/Papierkorb/Version. */
+/* "Mehr"-Menü (#dlgMore, ideen-backlog.md #17): Archiv/Papierkorb/Version.
+   Bug gefunden 12.09.2026: ".more-item { display: flex }" hat dieselbe
+   Spezifität wie das Browser-Standard-"[hidden] { display: none }" und
+   steht im eigenen Stylesheet SPÄTER — dadurch gewann bisher immer
+   .more-item, und admin-only-Buttons (Archiv/Papierkorb/Admin-Zugang/
+   "Feedback der Eltern") blieben für Klassen-Link-Besucher trotz gesetztem
+   .hidden sichtbar. Gleiches Muster wie schon bei .push-bell/.scroll-top-
+   btn: display nur für den NICHT-hidden-Fall setzen, dann kann [hidden]
+   wieder gewinnen. */
 .more-list { display: flex; flex-direction: column; gap: 2px; }
-.more-item {
+.more-item:not([hidden]) {
   display: flex;
   align-items: center;
   gap: 12px;

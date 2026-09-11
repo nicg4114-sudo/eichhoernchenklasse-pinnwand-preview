@@ -3775,9 +3775,17 @@ async function init() {
   // beim Start abgebrochen) bzw. auf diesem Gerät wieder abmelden — nur
   // am Hauptlink überhaupt sichtbar, nie auf einem Klassen-Link.
   if (elAdminBtn) {
-    elAdminBtn.hidden = classLocked;
+    // Nutzerwunsch 12.09.2026: NICHT hier einmalig setzen — beim allerersten
+    // Besuch über einen Klassen-Link ändert applyClassLink() (in
+    // loadClasses(), läuft erst in init() NACH der Dialog-Verdrahtung)
+    // classLocked noch von false auf true. Eine einmalige Zuweisung hier
+    // hätte also mit dem alten, noch falschen Wert gerechnet und den
+    // Admin-Button für genau diesen ersten Besuch fälschlich sichtbar
+    // gelassen. Stattdessen wie die anderen Mehr-Menü-Punkte bei jedem
+    // Öffnen neu bestimmen (siehe elMoreBtn-Listener weiter unten).
     if (elMoreBtn) {
       elMoreBtn.addEventListener("click", () => {
+        elAdminBtn.hidden = classLocked;
         elAdminBtnLabel.textContent = isAdmin() ? "Admin-Zugang beenden" : "Admin-Zugang freischalten";
       });
     }
