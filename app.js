@@ -173,6 +173,18 @@ function applyClassTheme(slug) {
 if (classLocked && localStorage.getItem(CLASS_SLUG_KEY) === "schmetterling") {
   applyClassTheme("schmetterling");
 }
+
+// ideen-backlog.md #19: Admin-Rechte am Hauptlink brauchen jetzt zusätzlich
+// ein gemeinsames Passwort (serverseitig geprüft, siehe migration-021) —
+// der Hauptlink allein reicht nicht mehr. Auf einem Klassen-Link
+// (classLocked) gibt es ohnehin nie Admin-Rechte, dort bleibt der Wert
+// bewusst leer. Das eingegebene Passwort wird geräteseitig gemerkt, damit
+// nicht bei jedem Besuch neu gefragt wird (gleiches Prinzip wie
+// CLASS_LOCK_KEY oben) — echten Schutz bietet die Datenbank, nicht dieses
+// Merken.
+const ADMIN_CODE_KEY = "pinnwand_admin_code";
+let adminCode = classLocked ? "" : (localStorage.getItem(ADMIN_CODE_KEY) || "");
+function isAdmin() { return !classLocked && !!adminCode; }
 // Merkt sich den zuletzt eingetragenen Ersteller-Namen als Vorschlag für die
 // nächste neue Karte (Lehrkraft/Elternsprecher legen meist mehrere Karten
 // hintereinander an und müssten sonst jedes Mal neu tippen).
@@ -237,6 +249,8 @@ const dlgVersion = $("dlgVersion");
 const elVersionBtn = $("moreVersionBtn");
 const dlgMore = $("dlgMore");
 const elMoreBtn = $("moreBtn");
+const elAdminBtn = $("moreAdminBtn");
+const elAdminBtnLabel = $("moreAdminBtnLabel");
 const dlgKalenderAdmin = $("dlgKalenderAdmin");
 const elKalAdminBody = $("kalAdminBody");
 const dlgSearch = $("dlgSearch");
@@ -589,11 +603,26 @@ function updateBrandTitle() {
   elBrandTitle.textContent = cls ? `${CLASS_ICON[cls.slug] || ""} ${cls.name}` : "🐿️🦋 Klassen-Pinnwand";
 }
 
+// ideen-backlog.md #19: Admin-Funktionen verlangen serverseitig (siehe
+// migration-021) zusätzlich das gemeinsame Admin-Passwort. Statt an jeder
+// einzelnen Aufrufstelle p_admin_code mitzugeben, wird es hier für die
+// bekannten Admin-RPCs automatisch ergänzt — Aufrufstellen bleiben
+// unverändert, und neue Admin-Funktionen müssen nur in dieses eine Set
+// eingetragen werden.
+const ADMIN_CODE_RPCS = new Set([
+  "create_card", "update_card", "trash_card", "restore_card",
+  "delete_card_forever", "empty_trash", "create_folder", "rename_folder",
+  "delete_folder", "set_schedule", "create_recurring_event",
+  "update_recurring_event", "delete_recurring_event", "set_school_holidays",
+  "add_poll_option", "update_poll_option", "delete_poll_option",
+]);
+
 async function rpc(name, args = {}) {
+  const body = ADMIN_CODE_RPCS.has(name) ? { ...args, p_admin_code: adminCode } : args;
   const res = await fetch(`${REST()}/rpc/${name}`, {
     method: "POST",
     headers: { ...AUTH(), "Content-Type": "application/json" },
-    body: JSON.stringify(args),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw await apiError(res);
   const text = await res.text();
@@ -953,7 +982,7 @@ function renderCard(c, opts) {
         ${c.pinned && !inTrash ? `<span class="pin-flag">${ICONS.pin}Angepinnt</span>` : ""}
         ${!inTrash ? classChipHtml(c) : ""}
         <span class="spacer"></span>
-        ${classLocked ? "" : `
+        ${!isAdmin() ? "" : `
         <details class="menu">
           <summary title="Aktionen">${ICONS.menu}</summary>
           <div class="menu-list">${menu}</div>
@@ -1020,7 +1049,7 @@ function linkedBackChipHtml(c) {
 function renderLinkedSection(c, inTrash) {
   if (!["termin", "hinweis"].includes(c.type) || inTrash) return "";
   const linked = cards.filter((x) => x.parent_id === c.id && !x.trashed_at);
-  const addBtn = classLocked ? "" :
+  const addBtn = !isAdmin() ? "" :
     `<button type="button" class="btn small link" data-action="add-linked" data-card="${c.id}">+ Element hier verknüpfen</button>`;
   const items = linked.map((x) => renderCard(x, { nested: true })).join("");
 
@@ -1065,7 +1094,7 @@ function renderKurznachricht(c) {
       <div class="kurz-bubble-head">
         <b>${esc(c.title)}</b>
         <span class="spacer"></span>
-        ${classLocked ? "" : `
+        ${!isAdmin() ? "" : `
         <details class="menu">
           <summary title="Aktionen">${ICONS.menu}</summary>
           <div class="menu-list">${menu}</div>
@@ -1120,6 +1149,35 @@ function renderStundenplanStrip() {
       <span class="willkommen-title">${ICONS.kalender}Stundenplan</span>
       <span class="willkommen-chevron">${ICONS.chevron}</span>
     </button>`;
+}
+
+// ideen-backlog.md #19: Einmalige Passwort-Abfrage für Admin-Rechte am
+// Hauptlink (kein Klassen-Link) — die eigentliche Prüfung läuft über
+// verify_admin_code() in der Datenbank (migration-021), nicht nur
+// clientseitig. Bei falschem Passwort erneut fragen; "Abbrechen" lässt
+// ohne Admin-Rechte weiter (z. B. falls doch mal jemand ohne Absicht den
+// Hauptlink öffnet) — kein Zwang, sich einzuloggen, um die Pinnwand zu
+// lesen.
+async function maybeShowAdminLogin() {
+  if (classLocked || adminCode) return;
+  for (;;) {
+    const vals = await promptDlg("Admin-Zugang", [
+      { name: "code", label: "Admin-Passwort", type: "password", placeholder: "Passwort" },
+    ]);
+    if (!vals) return;
+    let ok = false;
+    try {
+      ok = await rpc("verify_admin_code", { p_admin_code: vals.code });
+    } catch {
+      ok = false;
+    }
+    if (ok) {
+      adminCode = vals.code;
+      localStorage.setItem(ADMIN_CODE_KEY, adminCode);
+      return;
+    }
+    toast("Falsches Passwort.");
+  }
 }
 
 // ideen-backlog.md #21: Täglicher Willkommens-Splashscreen, zusätzlich zum
@@ -1404,7 +1462,7 @@ function renderFolderView(dateiCards) {
     const foldersHere = foldersList.filter((f) => !activeClassId || !f.class_id || f.class_id === activeClassId);
     const tiles = foldersHere.map((f) => folderTile(f.id, f.class_id ? f.name : `🏫 ${f.name}`)).join("")
       + folderTile("", "Ohne Ordner")
-      + (classLocked ? "" : `
+      + (!isAdmin() ? "" : `
         <button class="folder-tile folder-tile-new" data-action="create-folder">
           <span class="folder-tile-icon">+</span>
           <span class="folder-tile-label">Neuer Ordner</span>
@@ -1415,7 +1473,7 @@ function renderFolderView(dateiCards) {
   const items = dateiCards.filter((c) => (c.folder_id || "") === openFolderId);
   const folder = foldersList.find((f) => f.id === openFolderId);
   markFolderSeen(openFolderId);
-  const manage = (!classLocked && folder) ? `
+  const manage = (isAdmin() && folder) ? `
     <button class="btn small" data-action="rename-folder" data-folder="${folder.id}">Umbenennen</button>
     <button class="btn small danger" data-action="delete-folder" data-folder="${folder.id}">Löschen</button>` : "";
   const dot = folder ? `<span class="folder-color-dot"${folderColorStyle(folder.id)}></span>` : "";
@@ -1573,7 +1631,7 @@ function renderKalenderDay() {
 // Kalender war redundant und irreführend (Kalender != Stundenplan).
 // Hier bleiben nur die tatsächlich kalenderbezogenen Verwaltungspunkte.
 function renderKalenderView() {
-  const adminRow = classLocked ? "" : `
+  const adminRow = !isAdmin() ? "" : `
     <div class="cal-admin-row">
       <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="recurring">${ICONS.kalender}Wiederkehrende Ereignisse</button>
       <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="holidays">${ICONS.kalender}Ferien &amp; freie Tage</button>
@@ -1638,7 +1696,7 @@ function renderStundenplanTable() {
 }
 
 function renderStundenplanView() {
-  const head = classLocked ? "" : `
+  const head = !isAdmin() ? "" : `
     <div class="dateien-head">
       <span class="spacer"></span>
       <button class="btn small ghost" data-action="edit-stundenplan">Bearbeiten</button>
@@ -2228,7 +2286,7 @@ function render() {
     b.classList.toggle("active", b.dataset.view === view));
   // Sitzt seit ideen-backlog.md #17 fest oben in der Kopfzeile statt nur
   // auf der Startseite über der Fußleiste — deshalb jetzt ansichtsunabhängig.
-  elFab.style.display = configured && !classLocked ? "" : "none";
+  elFab.style.display = configured && isAdmin() ? "" : "none";
   updateScrollTopButton();
 
   if (!loaded) return;
@@ -2245,7 +2303,7 @@ function render() {
   } else if (view === "dateien") {
     elFeed.innerHTML = renderFolderView(list.filter((c) => c.type === "datei"));
   } else if (view === "papierkorb") {
-    const toolbar = list.length && !classLocked
+    const toolbar = list.length && isAdmin()
       ? `<div class="feed-toolbar">
            <button class="btn link danger" data-action="empty-trash">Papierkorb jetzt leeren</button>
          </div>`
@@ -2309,7 +2367,7 @@ function promptDlg(title, fields) {
       ? `<select name="${esc(f.name)}" ${i === 0 ? "autofocus" : ""}>${f.options
           .map((o) => `<option value="${esc(o.value)}" ${o.value === f.value ? "selected" : ""}>${esc(o.label)}</option>`)
           .join("")}</select>`
-      : `<input type="text" name="${esc(f.name)}" placeholder="${esc(f.placeholder || "")}"
+      : `<input type="${f.type || "text"}" name="${esc(f.name)}" placeholder="${esc(f.placeholder || "")}"
               maxlength="${f.maxlength || 200}" value="${esc(f.value || "")}"
               ${f.optional ? "" : "required"} ${i === 0 ? "autofocus" : ""}>`)).join("");
     const form = $("promptForm");
@@ -2939,11 +2997,13 @@ async function doAction(fn, successMsg) {
   }
 }
 
-// Aktionen, die nur über den Hauptlink (nicht per Klassen-Link) verfügbar
-// sind — Karten anlegen/bearbeiten/löschen/anpinnen sowie Papierkorb-
-// Aktionen. Zusätzlich zur Oberfläche (die diese Buttons bei classLocked
+// Aktionen, die Admin-Rechte brauchen (Hauptlink + Admin-Passwort, siehe
+// #19) — Karten anlegen/bearbeiten/löschen/anpinnen sowie Papierkorb-
+// Aktionen. Zusätzlich zur Oberfläche (die diese Buttons ohne Admin-Rechte
 // gar nicht erst rendert) hier nochmal geprüft, falls doch mal ein Klick
-// durchkommt (z. B. nach einem Reload mit veraltetem DOM-Zustand).
+// durchkommt (z. B. nach einem Reload mit veraltetem DOM-Zustand). Die
+// eigentliche Absicherung liegt in der Datenbank (migration-021,
+// p_admin_code) — diese Prüfung hier ist nur für eine saubere Oberfläche.
 const ADMIN_NUR_HAUPTLINK = new Set([
   "edit", "pin", "trash", "restore", "delete-forever", "add-linked", "empty-trash",
   "create-folder", "rename-folder", "delete-folder", "move-file",
@@ -2954,7 +3014,7 @@ async function handleFeedClick(ev) {
   const btn = ev.target.closest("[data-action]");
   if (!btn) return;
   const action = btn.dataset.action;
-  if (classLocked && ADMIN_NUR_HAUPTLINK.has(action)) return;
+  if (!isAdmin() && ADMIN_NUR_HAUPTLINK.has(action)) return;
   const menu = btn.closest("details.menu");
   if (menu) menu.removeAttribute("open");
 
@@ -3526,6 +3586,28 @@ async function init() {
     });
   }
 
+  // ideen-backlog.md #19: Admin-Zugang nachträglich freischalten (falls
+  // beim Start abgebrochen) bzw. auf diesem Gerät wieder abmelden — nur
+  // am Hauptlink überhaupt sichtbar, nie auf einem Klassen-Link.
+  if (elAdminBtn) {
+    elAdminBtn.hidden = classLocked;
+    if (elMoreBtn) {
+      elMoreBtn.addEventListener("click", () => {
+        elAdminBtnLabel.textContent = isAdmin() ? "Admin-Zugang beenden" : "Admin-Zugang freischalten";
+      });
+    }
+    elAdminBtn.addEventListener("click", async () => {
+      if (isAdmin()) {
+        adminCode = "";
+        localStorage.removeItem(ADMIN_CODE_KEY);
+        render();
+      } else {
+        await maybeShowAdminLogin();
+        render();
+      }
+    });
+  }
+
   // Verwaltung Kalender/Stundenplan (nur Hauptlink) — Inhalt wechselt
   // zwischen mehreren "Screens" (renderKalAdminHome/-Schedule/-...), die
   // sich jeweils selbst verdrahten; hier nur das Schließen per data-close.
@@ -3577,6 +3659,12 @@ async function init() {
   }
 
   await loadClasses();
+  // applyClassLink() (in loadClasses()) kann classLocked erst hier ändern
+  // (erster Besuch über einen Klassen-Link) — adminCode oben wurde vor
+  // diesem Zeitpunkt mit dem alten classLocked-Wert berechnet, deshalb
+  // hier neu bestimmen, bevor irgendetwas admin-Abhängiges gerendert wird.
+  adminCode = classLocked ? "" : (localStorage.getItem(ADMIN_CODE_KEY) || "");
+  await maybeShowAdminLogin();
   maybeShowSplash();
   reload();
 
