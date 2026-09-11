@@ -118,13 +118,12 @@ let scheduleSlots = [];   // Stundenplan: [{id, class_id, weekday, period, start
 let recurringEvents = []; // wiederkehrende Termine: [{id, class_id, weekday, start_time, title, body}, ...]
 let schoolHolidays = [];  // Ferien/freie Tage: [{id, label, start_date, end_date}, ...]
 // Kalender-Ansicht (siehe renderKalenderView): Monat, der gerade angezeigt
-// wird (immer der 1. des Monats), und ein evtl. aufgeklappter Tag darunter.
+// wird (immer der 1. des Monats).
 let calendarMonth = null;
-let calendarSelectedDate = null;
 // Ordner-Unterseite (Rubrik "Datei", siehe renderFolderView): undefined =
 // Ordner-Raster, "" = Inhalt von "Ohne Ordner", sonst eine Ordner-Id.
 let openFolderId;
-// Welcher Termin-Streifen gerade aufgeklappt ist (siehe renderTermineView)
+// Welcher Termin-Streifen gerade aufgeklappt ist (siehe renderMonatsTermine)
 // — null/undefined = keiner.
 let openTerminId;
 // Dasselbe fürs Archiv (siehe renderArchivView) — eigener Zustand, weil
@@ -255,6 +254,8 @@ const dlgMore = $("dlgMore");
 const elMoreBtn = $("moreBtn");
 const elAdminBtn = $("moreAdminBtn");
 const elAdminBtnLabel = $("moreAdminBtnLabel");
+const elArchivBtn = $("moreArchivBtn");
+const elPapierkorbBtn = $("morePapierkorbBtn");
 const dlgKalenderAdmin = $("dlgKalenderAdmin");
 const elKalAdminBody = $("kalAdminBody");
 const dlgSearch = $("dlgSearch");
@@ -1306,39 +1307,7 @@ function renderTerminAufgabenRow(termine, list) {
   return `<div class="dash-tile-row count-${tiles.length}">${tiles.join("")}</div>`;
 }
 
-/* ---------- Termin-Rubrik (Akkordeon-Streifen + Zeitstrahl) ---------- */
-
-const TERMIN_ZEITSTRAHL = [
-  { label: "Diese Woche", max: 6 },
-  { label: "In 2 Wochen", max: 13 },
-  { label: "In 3 Wochen", max: 20 },
-  { label: "Später", max: Infinity },
-];
-
-// ideen-backlog.md #23: eigener "Start"-Zurück-Knopf hier entfernt — die
-// untere Navigation hat mit "Start" bereits einen immer erreichbaren,
-// klar erkennbaren Weg zurück, ein zweiter Knopf oben war nur Platzverbrauch.
-function renderTermineView(termine) {
-  const head = "";
-  if (!termine.length) {
-    return head + `<p class="rubrik-panel-empty">Noch keine Termine.</p>`;
-  }
-
-  const from = todayStart();
-  const buckets = TERMIN_ZEITSTRAHL.map((b) => ({ ...b, items: [] }));
-  for (const c of termine) {
-    const days = Math.round((parseISODate(c.event_date) - from) / 86400000);
-    (buckets.find((b) => days <= b.max) || buckets[buckets.length - 1]).items.push(c);
-  }
-
-  const groupsHtml = buckets.filter((b) => b.items.length).map((b) => `
-    <div class="termine-timeline-group">
-      <div class="termine-timeline-col"><span>${esc(b.label)}</span></div>
-      <div class="termine-timeline-strips">${b.items.map(renderTerminStrip).join("")}</div>
-    </div>`).join("");
-
-  return head + groupsHtml;
-}
+/* ---------- Termin/Kalender (gemeinsame Rubrik, siehe renderKalenderView) ---------- */
 
 // Wiederverwendbarer Akkordeon-Streifen: Kopfzeile mit Titel/Untertitel/
 // Datum, antippen klappt die volle Karte darunter auf. Genutzt von der
@@ -1550,15 +1519,11 @@ function termineForDate(dateStr) {
     c.type === "termin" && !c.trashed_at && c.event_date === dateStr && inActiveClass(c));
 }
 
-// Welche Punkt-Arten ein Tag im Monatsraster bekommt — getrennt nach
-// Termin und wiederkehrendem Ereignis, damit auf einen Blick erkennbar
-// ist, WAS an dem Tag los ist, nicht nur DASS etwas los ist.
-function dayEventFlags(dateStr, weekday) {
-  return {
-    termin: termineForDate(dateStr).length > 0,
-    // recurringForDate() liefert an Ferientagen bereits [] zurück.
-    recurring: recurringForDate(dateStr, weekday).length > 0,
-  };
+// Kurzer Titel-Ausschnitt für die Kalendertageszelle — Platz ist dort
+// sehr knapp, ganze Titel würden umbrechen und das Raster aufreißen.
+function shortenTitle(title, max = 12) {
+  const t = String(title || "");
+  return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
 function renderKalenderMonth() {
@@ -1581,18 +1546,25 @@ function renderKalenderMonth() {
       "cal-day",
       inMonth ? "" : "outside",
       dateStr === today ? "is-today" : "",
-      dateStr === calendarSelectedDate ? "is-selected" : "",
       holiday ? "is-holiday" : "",
     ].filter(Boolean).join(" ");
-    const flags = holiday ? { termin: false, recurring: false } : dayEventFlags(dateStr, weekday);
+    // Nutzerwunsch 11.09.2026: statt nur eines Punkts steht ein kurzer
+    // Titel-Ausschnitt direkt in der Tageszelle ("Schlagwort"), damit auf
+    // einen Blick erkennbar ist, WAS an dem Tag ansteht, nicht nur DASS
+    // etwas ansteht — dichter am Google-Kalender-Gefühl. Wiederkehrende
+    // Ereignisse bleiben ein schlanker Punkt (kein festes Datum, jede
+    // Woche gleich, bräuchten sonst zu viel Platz in jeder Zelle).
+    const dayTermine = holiday ? [] : termineForDate(dateStr);
+    const recurring = holiday ? [] : recurringForDate(dateStr, weekday);
+    const chips = dayTermine.slice(0, 2).map((t) =>
+      `<span class="cal-day-chip">${esc(shortenTitle(t.title))}</span>`).join("");
+    const more = dayTermine.length > 2
+      ? `<span class="cal-day-chip cal-day-chip-more">+${dayTermine.length - 2}</span>` : "";
     cells += `
       <button type="button" class="${cls}" data-action="cal-day" data-date="${dateStr}" title="${holiday ? esc(holiday.label) : ""}">
         <span class="cal-day-num">${d.getDate()}</span>
-        ${flags.termin || flags.recurring ? `
-          <span class="cal-day-dots">
-            ${flags.termin ? `<span class="cal-day-dot cal-day-dot-termin"></span>` : ""}
-            ${flags.recurring ? `<span class="cal-day-dot cal-day-dot-recurring"></span>` : ""}
-          </span>` : ""}
+        ${chips || more ? `<span class="cal-day-chips">${chips}${more}</span>` : ""}
+        ${recurring.length ? `<span class="cal-day-dot cal-day-dot-recurring" title="Wiederkehrendes Ereignis"></span>` : ""}
       </button>`;
     // Nach dem letzten Tag des Monats nicht unnötig eine ganze weitere,
     // komplett leere Woche anhängen.
@@ -1609,60 +1581,71 @@ function renderKalenderMonth() {
     <div class="cal-grid">${cells}</div>`;
 }
 
-function renderKalenderDay() {
-  if (!calendarSelectedDate) return "";
-  const dateStr = calendarSelectedDate;
-  const weekday = isoWeekday(parseISODate(dateStr));
-  const holiday = holidayForDate(dateStr);
-  const recurring = recurringForDate(dateStr, weekday);
-  const termine = termineForDate(dateStr);
+// Nutzerwunsch 11.09.2026: Kalender und Termin-Rubrik gehören zusammen —
+// unter der Monatsübersicht steht direkt die Liste aller Termine dieses
+// Monats (nicht mehr nur eines angetippten Tages), chronologisch
+// sortiert, als dieselben einklappbaren Streifen wie zuvor in der
+// separaten Termin-Rubrik (renderTerminStrip — antippen öffnet die volle
+// Karte). Wiederkehrende Ereignisse haben kein festes Datum und stehen
+// deshalb weiterhin nur im Kalender selbst (Punkt am Wochentag), nicht in
+// dieser Liste.
+function renderMonatsTermine(termine) {
+  const month = calendarMonth;
+  const monthTermine = termine
+    .filter((c) => {
+      const d = parseISODate(c.event_date);
+      return d.getFullYear() === month.getFullYear() && d.getMonth() === month.getMonth();
+    })
+    .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date))
+      || String(a.event_time || "").localeCompare(String(b.event_time || "")));
 
-  let body = "";
-  if (holiday) {
-    body += `<p class="cal-day-holiday">${ICONS.warning}<span>${esc(holiday.label)} — kein Unterricht</span></p>`;
+  if (!monthTermine.length) {
+    return `<p class="rubrik-panel-empty">Keine Termine in diesem Monat.</p>`;
   }
-  if (recurring.length) {
-    body += recurring.map((r) => `
-      <div class="event-row">
-        <div class="event-date-box"><b>${r.start_time ? fmtTime(r.start_time) : "—"}</b><span>jede Woche</span></div>
-        <div class="event-info"><b>${esc(r.title)}</b>${r.body ? `<span>${esc(r.body)}</span>` : ""}</div>
-      </div>`).join("");
-  }
-
-  if (termine.length) body += termine.map((c) => renderCard(c)).join("");
-
-  if (!body) body = `<p class="rubrik-panel-empty">Nichts los an diesem Tag.</p>`;
-
-  return `
-    <div class="cal-day-detail">
-      <h2 class="group-label">${esc(fmtDateLong(dateStr))}</h2>
-      ${body}
-    </div>`;
+  return `<div id="calMonthTermine">${monthTermine.map(renderTerminStrip).join("")}</div>`;
 }
 
-// ideen-backlog.md #22: die Verwaltungspunkte stehen jetzt als eigene
-// Kacheln direkt unter dem Kalender, statt hinter einem "Verwalten"-Knopf
-// in einem Zwischenmenü versteckt zu sein — ein Klick weniger für
+// ideen-backlog.md #22: die Verwaltungspunkte stehen als eigene Kacheln
+// direkt unter dem Kalender, statt hinter einem "Verwalten"-Knopf in
+// einem Zwischenmenü versteckt zu sein — ein Klick weniger für
 // Hauptlink-Nutzer.
 // ideen-backlog.md #17: "Stundenplan bearbeiten" gehört nicht hierher —
 // die eigenständige Stundenplan-Ansicht (renderStundenplanView()) hat
 // bereits ihren eigenen "Bearbeiten"-Knopf, ein zweiter Zugang über den
 // Kalender war redundant und irreführend (Kalender != Stundenplan).
 // Hier bleiben nur die tatsächlich kalenderbezogenen Verwaltungspunkte.
-function renderKalenderView() {
+function renderKalenderView(termine) {
   const adminRow = !isAdmin() ? "" : `
     <div class="cal-admin-row">
       <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="recurring">${ICONS.kalender}Wiederkehrende Ereignisse</button>
       <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="holidays">${ICONS.kalender}Ferien &amp; freie Tage</button>
     </div>`;
-  return `<div class="cal-wrap">${renderKalenderMonth()}</div>${renderKalenderDay()}${adminRow}`;
+  return `<div class="cal-wrap">${renderKalenderMonth()}</div>${renderMonatsTermine(termine)}${adminRow}`;
 }
 
+// Antippen eines Kalendertags springt direkt zum passenden Termin in der
+// Liste darunter (öffnet ihn gleich, wie ein Klick auf den Streifen
+// selbst) statt wie zuvor ein eigenes Tages-Panel aufzuklappen — näher am
+// Google-Kalender-Gefühl. Tage ohne Termin, aber mit Ferien/wieder-
+// kehrendem Ereignis, zeigen das kurz als Hinweis statt gar nichts zu tun.
 function wireKalender() {
   elFeed.querySelectorAll("[data-action='cal-day']").forEach((btn) => btn.addEventListener("click", () => {
     const date = btn.dataset.date;
-    calendarSelectedDate = calendarSelectedDate === date ? null : date;
-    render();
+    const dayTermine = termineForDate(date);
+    if (dayTermine.length) {
+      openTerminId = dayTermine[0].id;
+      render();
+      requestAnimationFrame(() => {
+        elFeed.querySelector(`[data-card="${dayTermine[0].id}"]`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      return;
+    }
+    const holiday = holidayForDate(date);
+    if (holiday) { toast(`${holiday.label} — kein Unterricht`); return; }
+    const recurring = recurringForDate(date, isoWeekday(parseISODate(date)));
+    if (recurring.length) { toast(recurring.map((r) => r.title).join(", ")); return; }
+    toast("Nichts los an diesem Tag.");
   }));
   elFeed.querySelector("[data-action='cal-prev']")?.addEventListener("click", () => {
     calendarMonth.setMonth(calendarMonth.getMonth() - 1);
@@ -2158,7 +2141,7 @@ function hashFromState() {
   if (view === "dateien") return openFolderId === undefined ? "#dateien" : `#dateien-${openFolderId}`;
   if (view === "archiv") return openArchivId ? `#archiv-${openArchivId}` : "#archiv";
   if (view === "papierkorb") return "#papierkorb";
-  if (view === "kalender") return calendarSelectedDate ? `#kalender-${calendarSelectedDate}` : "#kalender";
+  if (view === "kalender") return "#kalender";
   if (view === "aufgaben") return "#aufgaben";
   if (view === "stundenplan") return "#stundenplan";
   return "";
@@ -2178,12 +2161,13 @@ function applyHash(hash) {
   else if (h === "archiv") { view = "archiv"; openArchivId = null; }
   else if (h === "papierkorb") { view = "papierkorb"; }
   else if (h.startsWith("kalender-")) {
+    // Legacy-Link auf einen bestimmten Tag — es gibt kein eigenes
+    // Tages-Panel mehr, aber der Monat wird trotzdem passend angezeigt.
     view = "kalender";
-    calendarSelectedDate = h.slice(9);
-    calendarMonth = parseISODate(calendarSelectedDate);
+    calendarMonth = parseISODate(h.slice(9));
     calendarMonth.setDate(1);
   } else if (h === "kalender") {
-    view = "kalender"; calendarSelectedDate = null; calendarMonth = null;
+    view = "kalender"; calendarMonth = null;
   } else if (h === "aufgaben") { view = "aufgaben"; }
   else if (h === "stundenplan") { view = "stundenplan"; }
   else if (!h.startsWith("karte-")) { view = "feed"; }
@@ -2272,6 +2256,12 @@ function openCardById(id) {
   } else if (c.type === "termin") {
     view = "termine";
     openTerminId = id;
+    // Damit die Monatsübersicht direkt den richtigen Monat zeigt (Liste
+    // darunter ist jetzt monatsbezogen, siehe renderMonatsTermine).
+    if (c.event_date) {
+      calendarMonth = parseISODate(c.event_date);
+      calendarMonth.setDate(1);
+    }
   } else if (["umfrage", "liste", "tabelle"].includes(c.type)) {
     view = "beteiligung";
   } else if (c.type === "datei") {
@@ -2301,6 +2291,11 @@ function openCardById(id) {
 }
 
 function render() {
+  // Archiv/Papierkorb sind Admin-Sache — dieser Schutz greift unabhängig
+  // vom Zugangsweg (Hash-Link, "Mehr"-Menü, Zustand von vor einer
+  // Abmeldung), Nutzerwunsch 11.09.2026.
+  if ((view === "archiv" || view === "papierkorb") && !isAdmin()) view = "feed";
+
   document.querySelectorAll("#viewTabs button").forEach((b) =>
     b.classList.toggle("active", b.dataset.view === view));
   // Sitzt seit ideen-backlog.md #17 fest oben in der Kopfzeile statt nur
@@ -2314,8 +2309,9 @@ function render() {
   if (view === "feed") {
     elFeed.innerHTML = renderStart(list);
     wireHinweisCarousel();
-  } else if (view === "termine") {
-    elFeed.innerHTML = renderTermineView(list.filter((c) => c.type === "termin"));
+  } else if (view === "termine" || view === "kalender") {
+    elFeed.innerHTML = renderKalenderView(list.filter((c) => c.type === "termin"));
+    wireKalender();
   } else if (view === "beteiligung") {
     elFeed.innerHTML = renderBeteiligungView(
       list.filter((c) => c.type === "umfrage" || c.type === "liste" || c.type === "tabelle"));
@@ -2328,9 +2324,6 @@ function render() {
          </div>`
       : "";
     elFeed.innerHTML = toolbar + list.map(renderCard).join("");
-  } else if (view === "kalender") {
-    elFeed.innerHTML = renderKalenderView();
-    wireKalender();
   } else if (view === "aufgaben") {
     elFeed.innerHTML = renderAufgabenView(list.filter((c) => c.is_aufgabe));
   } else if (view === "stundenplan") {
@@ -3179,11 +3172,15 @@ async function handleFeedClick(ev) {
       } else if (type === "termin") {
         view = "termine";
         openTerminId = btn.dataset.card || null;
+        const jumpTermin = openTerminId && cardById(openTerminId);
+        if (jumpTermin && jumpTermin.event_date) {
+          calendarMonth = parseISODate(jumpTermin.event_date);
+          calendarMonth.setDate(1);
+        }
       } else if (type === "beteiligung") {
         view = "beteiligung";
       } else if (type === "kalender") {
         view = "kalender";
-        calendarSelectedDate = null;
         calendarMonth = null;
       } else if (type === "stundenplan") {
         view = "stundenplan";
@@ -3611,7 +3608,13 @@ async function init() {
   // zeigt seit dem Umbau auf denselben Button hier im Dialog) — der
   // schließt hier nur noch das Menü mit, öffnet aber nicht selbst was.
   if (elMoreBtn && dlgMore) {
-    elMoreBtn.addEventListener("click", () => dlgMore.showModal());
+    elMoreBtn.addEventListener("click", () => {
+      // Archiv/Papierkorb sind Admin-Sache — für alle anderen unsichtbar,
+      // nicht nur ungeschrieben-lassen (Nutzerwunsch 11.09.2026).
+      if (elArchivBtn) elArchivBtn.hidden = !isAdmin();
+      if (elPapierkorbBtn) elPapierkorbBtn.hidden = !isAdmin();
+      dlgMore.showModal();
+    });
     dlgMore.addEventListener("click", (ev) => {
       const item = ev.target.closest(".more-item[data-view]");
       if (item) { view = item.dataset.view; render(); }
