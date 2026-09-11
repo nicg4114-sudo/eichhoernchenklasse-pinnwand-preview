@@ -257,9 +257,6 @@ const elAdminBtn = $("moreAdminBtn");
 const elAdminBtnLabel = $("moreAdminBtnLabel");
 const elArchivBtn = $("moreArchivBtn");
 const elPapierkorbBtn = $("morePapierkorbBtn");
-const elFeedbackBtn = $("moreFeedbackBtn");
-const elFeedbackAdminBtn = $("moreFeedbackAdminBtn");
-const dlgFeedback = $("dlgFeedback");
 const dlgKalenderAdmin = $("dlgKalenderAdmin");
 const elKalAdminBody = $("kalAdminBody");
 const dlgSearch = $("dlgSearch");
@@ -487,7 +484,7 @@ function toast(msg, isError = false) {
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgFeedback, dlgSearch, dlgSplash].some((d) => d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgSearch, dlgSplash].some((d) => d.open);
 }
 
 /* ---------- API ---------- */
@@ -631,7 +628,7 @@ const ADMIN_CODE_RPCS = new Set([
   "delete_folder", "set_schedule", "create_recurring_event",
   "update_recurring_event", "delete_recurring_event", "set_school_holidays",
   "add_poll_option", "update_poll_option", "delete_poll_option",
-  "list_feedback", "mark_feedback_read",
+  "list_feedback", "comment_feedback",
 ]);
 
 async function rpc(name, args = {}) {
@@ -1820,29 +1817,51 @@ function renderKalAdminHome() {
   }));
 }
 
-/* ---------- Eltern-Feedback (Nutzerwunsch 12.09.2026, migration-023) ----- */
+/* ---------- Feedback (Nutzerwunsch 12.09.2026, migration-023/024) -------
+   Rein technisches Feedback (Bugs, Verbesserungsvorschläge) von Nutzern an
+   die Admins — eigene Rubrik statt Dialog, erreichbar über "Mehr" ->
+   "Feedback" für alle. Nutzer sehen ein Sende-Formular (Name + Text),
+   Admins statt dessen die Liste aller Nachrichten mit einem Feld für einen
+   internen Kommentar (keine Antwort an den Absender — Feedback ist
+   anonym, es gibt keinen Rückkanal). */
 
-const elFeedbackBody = $("feedbackBody");
+let feedbackEntries = null; // null = noch nicht geladen
 
-async function openFeedbackDialog() {
-  elFeedbackBody.innerHTML = `<p class="rubrik-panel-empty">Lädt…</p>`;
-  dlgFeedback.showModal();
-  let entries = [];
+async function loadFeedbackEntries() {
   try {
-    entries = await rpc("list_feedback", {});
+    feedbackEntries = await rpc("list_feedback", {});
   } catch (err) {
-    elFeedbackBody.innerHTML = `<p class="rubrik-panel-empty">${esc(err.message || "Laden fehlgeschlagen.")}</p>`;
-    return;
+    feedbackEntries = { error: err.message || "Laden fehlgeschlagen." };
   }
-  renderFeedbackList(entries);
+  if (view === "feedback") render();
 }
 
-function renderFeedbackList(entries) {
-  if (!entries.length) {
-    elFeedbackBody.innerHTML = `<p class="rubrik-panel-empty">Noch kein Feedback eingegangen.</p>`;
-    return;
+function renderFeedbackView() {
+  if (!isAdmin()) {
+    return `
+      <div class="feedback-form">
+        <p class="rubrik-panel-hint">Technisches Problem gefunden oder eine Idee für die App? Kurz beschreiben — landet direkt bei den Admins.</p>
+        <label class="field"><span>Dein Name</span>
+          <input type="text" id="feedbackName" maxlength="80" placeholder="Name">
+        </label>
+        <label class="field"><span>Nachricht</span>
+          <textarea id="feedbackMessage" maxlength="2000" rows="5" placeholder="Was ist los?"></textarea>
+        </label>
+        <button type="button" class="btn primary" data-action="feedback-submit">Absenden</button>
+      </div>`;
   }
-  elFeedbackBody.innerHTML = entries.map((f) => {
+
+  if (feedbackEntries === null) {
+    loadFeedbackEntries();
+    return `<p class="rubrik-panel-empty">Lädt…</p>`;
+  }
+  if (feedbackEntries.error) {
+    return `<p class="rubrik-panel-empty">${esc(feedbackEntries.error)}</p>`;
+  }
+  if (!feedbackEntries.length) {
+    return `<p class="rubrik-panel-empty">Noch kein Feedback eingegangen.</p>`;
+  }
+  return `<div class="feedback-list">` + feedbackEntries.map((f) => {
     const cls = classesList.find((c) => c.id === f.class_id);
     return `
       <div class="feedback-item ${f.read_at ? "" : "is-unread"}" data-id="${f.id}">
@@ -1853,15 +1872,12 @@ function renderFeedbackList(entries) {
         </div>
         <p class="feedback-item-message">${esc(f.message)}</p>
         <span class="feedback-item-date">${fmtTimestamp(f.created_at)}</span>
+        <label class="field feedback-comment-field"><span>Interner Kommentar</span>
+          <textarea maxlength="2000" rows="2" placeholder="Notiz für die Admins, z. B. „erledigt“…">${esc(f.admin_comment || "")}</textarea>
+        </label>
+        <button type="button" class="btn small ghost" data-action="feedback-comment-save" data-id="${f.id}">Kommentar speichern</button>
       </div>`;
-  }).join("");
-  elFeedbackBody.querySelectorAll(".feedback-item.is-unread").forEach((el) => el.addEventListener("click", async () => {
-    try {
-      await rpc("mark_feedback_read", { p_id: el.dataset.id });
-      el.classList.remove("is-unread");
-      el.querySelector(".feedback-dot")?.remove();
-    } catch { /* nicht kritisch, Markierung als gelesen kann beim nächsten Öffnen erneut versucht werden */ }
-  }));
+  }).join("") + `</div>`;
 }
 
 // ---- Stundenplan ----
@@ -2132,7 +2148,7 @@ const EMPTY_TEXT = {
 
 // Views mit eigener Leer-Anzeige (Karussell/Kacheln zeigen ihren
 // Leer-Zustand selbst) — der generische Hinweistext ist dort überflüssig.
-const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender", "aufgaben", "stundenplan"]);
+const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender", "aufgaben", "stundenplan", "feedback"]);
 
 // Ab wie viel Scroll-Distanz der "Nach oben"-Button erscheint — bewusst
 // höher als eine Bildschirmhöhe, damit er nicht schon nach kurzem Scrollen
@@ -2262,6 +2278,7 @@ function hashFromState() {
   if (view === "kalender") return "#kalender";
   if (view === "aufgaben") return "#aufgaben";
   if (view === "stundenplan") return "#stundenplan";
+  if (view === "feedback") return "#feedback";
   return "";
 }
 
@@ -2288,6 +2305,7 @@ function applyHash(hash) {
     view = "kalender"; calendarMonth = null;
   } else if (h === "aufgaben") { view = "aufgaben"; }
   else if (h === "stundenplan") { view = "stundenplan"; }
+  else if (h === "feedback") { view = "feedback"; }
   else if (!h.startsWith("karte-")) { view = "feed"; }
 }
 
@@ -2446,6 +2464,8 @@ function render() {
     elFeed.innerHTML = renderAufgabenView(list.filter((c) => c.is_aufgabe));
   } else if (view === "stundenplan") {
     elFeed.innerHTML = renderStundenplanView();
+  } else if (view === "feedback") {
+    elFeed.innerHTML = renderFeedbackView();
   } else {
     elFeed.innerHTML = renderArchivView(list);
   }
@@ -3451,6 +3471,34 @@ async function handleFeedClick(ev) {
         "Stimme gespeichert.");
       break;
     }
+    case "feedback-submit": {
+      const name = $("feedbackName")?.value.trim() || "";
+      const message = $("feedbackMessage")?.value.trim() || "";
+      if (!name) { toast("Bitte deinen Namen angeben.", true); break; }
+      if (!message) { toast("Bitte eine Nachricht angeben.", true); break; }
+      try {
+        await rpc("send_feedback", { p_class_id: activeClassId || null, p_sender_name: name, p_message: message });
+        toast("Danke, deine Nachricht ist angekommen.");
+        $("feedbackName").value = "";
+        $("feedbackMessage").value = "";
+      } catch (err) {
+        toast(err.message || "Senden fehlgeschlagen.", true);
+      }
+      break;
+    }
+    case "feedback-comment-save": {
+      const item = btn.closest(".feedback-item");
+      const comment = item?.querySelector("textarea")?.value.trim() || "";
+      try {
+        await rpc("comment_feedback", { p_id: btn.dataset.id, p_comment: comment });
+        toast("Kommentar gespeichert.");
+        feedbackEntries = null;
+        render();
+      } catch (err) {
+        toast(err.message || "Speichern fehlgeschlagen.", true);
+      }
+      break;
+    }
   }
 }
 
@@ -3732,42 +3780,18 @@ async function init() {
       // nicht nur ungeschrieben-lassen (Nutzerwunsch 11.09.2026).
       if (elArchivBtn) elArchivBtn.hidden = !isAdmin();
       if (elPapierkorbBtn) elPapierkorbBtn.hidden = !isAdmin();
-      // "Feedback der Eltern" (Liste ansehen) nur für Admins, "Feedback an
-      // die Klassenleitung" (Absenden) für alle (Nutzerwunsch 12.09.2026).
-      if (elFeedbackAdminBtn) elFeedbackAdminBtn.hidden = !isAdmin();
       dlgMore.showModal();
     });
     dlgMore.addEventListener("click", (ev) => {
       const item = ev.target.closest(".more-item[data-view]");
-      if (item) { view = item.dataset.view; render(); }
-      if (ev.target.closest("[data-close]")) dlgMore.close();
-    });
-  }
-
-  // Eltern-Feedback (Nutzerwunsch 12.09.2026, migration-023).
-  if (elFeedbackBtn) {
-    elFeedbackBtn.addEventListener("click", async () => {
-      const vals = await promptDlg("Feedback an die Klassenleitung", [
-        { name: "name", label: "Dein Name", maxlength: 80 },
-        { name: "message", label: "Deine Nachricht", type: "textarea", maxlength: 2000 },
-      ]);
-      if (!vals) return;
-      try {
-        await rpc("send_feedback", {
-          p_class_id: activeClassId || null,
-          p_sender_name: vals.name,
-          p_message: vals.message,
-        });
-        toast("Danke, deine Nachricht ist angekommen.");
-      } catch (err) {
-        toast(err.message || "Senden fehlgeschlagen.");
+      if (item) {
+        view = item.dataset.view;
+        // Immer frisch laden, nicht die letzte Liste von vorhin zeigen
+        // (Nutzerwunsch 12.09.2026: eigene Rubrik statt Dialog).
+        if (view === "feedback") feedbackEntries = null;
+        render();
       }
-    });
-  }
-  if (elFeedbackAdminBtn && dlgFeedback) {
-    elFeedbackAdminBtn.addEventListener("click", openFeedbackDialog);
-    dlgFeedback.addEventListener("click", (ev) => {
-      if (ev.target.closest("[data-close]")) dlgFeedback.close();
+      if (ev.target.closest("[data-close]")) dlgMore.close();
     });
   }
 

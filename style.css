@@ -398,6 +398,15 @@ main {
   color: var(--muted);
   font-size: .92rem;
 }
+.rubrik-panel-hint { color: var(--muted); font-size: .88rem; margin: 0 0 14px; }
+
+/* Feedback-Rubrik (Nutzerwunsch 12.09.2026) — Sende-Formular für alle
+   Nutzer, siehe renderFeedbackView(). */
+.feedback-form { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.feedback-list { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 16px; }
+.feedback-list .feedback-item:first-child { border-top: none; }
+.feedback-comment-field { margin-top: 8px; }
+.feedback-comment-field textarea { font-size: .85rem; }
 
 /* ---------- Start-Dashboard ---------- */
 
