@@ -74,15 +74,18 @@
   --line-strong: #d8cbb0;
   --bottom-nav-h: 86px; /* Nutzerwunsch 11.09.2026: nochmal größer (zuvor 76px, 68px, 60px) */
   /* Fließende Dashboard-Skalierung nach Bildschirmhöhe (dvh): zwischen
-     600px (kleine Handys, z. B. iPhone SE) und 860px (große Handys)
-     wandert --dash-scale linear von 0.6 auf 1 — darunter/darüber bleibt
-     es an der jeweiligen Grenze stehen. Alle Dashboard-Abstände unten
-     rechnen ihren Ursprungswert mal --dash-scale, damit bei 1 exakt das
-     bisherige Design rauskommt und es zu kleinen Bildschirmen hin gleich-
-     mäßig kompakter wird. Jeweils erste Zeile ist der Fallback für
-     Browser ohne dvh-Unterstützung (dann gilt der feste alte Wert). */
-  --dash-scale: 1;
-  --dash-scale: clamp(.6, calc(.6 + (100dvh - 600px) / 260px * .4), 1);
+     600px (kleine Handys, z. B. iPhone SE) und 900px (große Handys)
+     wandert --dash-scale linear von 0.5 auf 0.85 — darunter/darüber
+     bleibt es an der jeweiligen Grenze stehen. Nutzerwunsch 14.09.2026:
+     spürbar mehr Schrumpfung (vorher .6–1 zwischen 600–860px) und ein
+     niedrigerer Grundwert (0.85 statt 1 als Maximum), weil selbst auf
+     normal großen Handys noch zu viel Leerraum zwischen den Dashboard-
+     Rubriken stand. Alle Dashboard-Abstände unten rechnen ihren
+     Ursprungswert mal --dash-scale, damit es überall gleichmäßig
+     kompakter wird. Jeweils erste Zeile ist der Fallback für Browser
+     ohne dvh-Unterstützung (dann gilt der feste alte Wert). */
+  --dash-scale: .85;
+  --dash-scale: clamp(.5, calc(.5 + (100dvh - 600px) / 300px * .35), .85);
   --dash-gap: 16px;
   --dash-gap: calc(var(--dash-scale) * 16px);
 }
@@ -351,13 +354,6 @@ main {
   margin-bottom: 6px;
 }
 
-.stats-line {
-  margin: 0 0 14px;
-  font-size: .87rem;
-  color: var(--muted);
-  font-weight: 600;
-}
-
 /* Kleine Zähler-Blase (neue Einträge, Dateianzahl etc.) — auf Ordner-
    Kacheln und den Start-Bubbles verwendet. */
 .count-badge {
@@ -527,7 +523,7 @@ main {
    zur Hälfte über die obere Kante hinaus (siehe .hinweis-arrow) — ohne
    eigenen Abstand nach oben lag das direkt am oberen Seitenrand bzw. an
    dem, was darüber steht. */
-.hinweis-carousel-wrap { position: relative; margin-top: 18px; }
+.hinweis-carousel-wrap { position: relative; margin-top: var(--dash-gap); }
 .hinweis-carousel {
   display: flex;
   /* Standard wäre align-items:stretch — würde alle Slides auf die Höhe

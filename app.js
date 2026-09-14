@@ -1094,22 +1094,6 @@ function renderLinkedSection(c, inTrash) {
 
 /* ---------- Gruppierte Übersicht (Pinnwand) ---------- */
 
-// Kurze Kennzahlen-Zeile über den Kategorien, nur wenn es etwas zu zeigen gibt.
-function statsLineHtml(list) {
-  const from = todayStart();
-  const to = new Date(from);
-  to.setDate(to.getDate() + 7);
-  const upcoming = list.filter((c) => c.type === "termin" && c.event_date
-    && parseISODate(c.event_date) >= from && parseISODate(c.event_date) <= to).length;
-  const openLists = list.filter((c) => c.type === "liste"
-    && (c.list_items || []).some((i) => i.preset && !i.filled_by)).length;
-
-  const parts = [];
-  if (upcoming) parts.push(`${upcoming} ${upcoming === 1 ? "Termin" : "Termine"} in den nächsten 7 Tagen`);
-  if (openLists) parts.push(`${openLists} ${openLists === 1 ? "Liste" : "Listen"} mit offenen Plätzen`);
-  return parts.length ? `<p class="stats-line">${parts.join(" · ")}</p>` : "";
-}
-
 // Kompakte Chat-Bubble für eine Kurznachricht (Hinweis mit is_kurznachricht)
 // — bewusst ohne "Anpinnen" (in einem kleinen Chat-Feed ohne klare
 // Bedeutung) und ohne die große Kartenumrandung normaler Hinweise.
@@ -1153,8 +1137,7 @@ function renderStart(list) {
   // Elternabend) sitzt dazwischen. Der Stundenplan läuft jetzt vollständig
   // über diesen Reiter — die Kalender-Kachel führt direkt in den Kalender,
   // ohne Zwischenmenü.
-  return statsLineHtml(list)
-    + `<p class="dash-section-label">Hier steht alles Aktuelles:</p>`
+  return `<p class="dash-section-label">Hier steht alles Aktuelles:</p>`
     + renderHinweisCarousel(hinweise)
     + renderStundenplanStrip()
     + renderTerminAufgabenRow(termine, list);
