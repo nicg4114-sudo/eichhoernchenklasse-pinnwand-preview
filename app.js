@@ -747,6 +747,15 @@ function renderTermin(c, inTrash) {
     </div>${calActions}`;
 }
 
+// Nutzerwunsch 14.09.2026: Kontingent/Springer bei Umfrage-Option, Liste
+// (Modus "eintragen") und Tabelle — rein aus der Reihenfolge abgeleitet,
+// keine eigene Datenbank-Spalte pro Eintrag/Stimme/Zeile. "index" ist die
+// nullbasierte Position innerhalb der Anmeldungen (0 = zuerst).
+function isSpringer(index, capacity) {
+  return capacity != null && index >= capacity;
+}
+const SPRINGER_BADGE = `<span class="springer-badge" title="Kontingent voll — zusätzlicher Springer">Springer</span>`;
+
 function renderListe(c) {
   const items = c.list_items || [];
   let rows = "";
@@ -770,7 +779,13 @@ function renderListe(c) {
   }
 
   // Modus "eintragen" — jede Zeile hat dieselbe Spaltenstruktur
-  // (Beschreibung / Name-oder-Aktion / X), egal ob vorgegeben oder frei hinzugefügt.
+  // (Beschreibung / Name-oder-Aktion / X), egal ob vorgegeben oder frei
+  // hinzugefügt. Kontingent (Nutzerwunsch 14.09.2026) zählt nur die frei
+  // hinzugefügten Einträge, in der Reihenfolge, in der sie angelegt
+  // wurden (items ist schon nach position/created_at sortiert) — ab
+  // c.capacity gilt ein weiterer freier Eintrag als "Springer".
+  let freeIdx = 0;
+  let springerCount = 0;
   for (const it of items) {
     if (it.preset && !it.filled_by) {
       rows += `
@@ -786,16 +801,22 @@ function renderListe(c) {
           <button class="icon-btn" data-action="item-unfill" data-item="${it.id}" data-who="${esc(it.filled_by)}" title="Eintrag entfernen">✕</button>
         </li>`;
     } else {
+      const springer = isSpringer(freeIdx, c.capacity);
+      if (springer) springerCount++;
+      freeIdx++;
       rows += `
         <li>
           <span class="grow">${esc(it.text)}</span>
-          <span class="who">${esc(it.filled_by || "")}</span>
+          <span class="who-wrap"><span class="who">${esc(it.filled_by || "")}</span>${springer ? SPRINGER_BADGE : ""}</span>
           <button class="icon-btn" data-action="item-delete" data-item="${it.id}" title="Eintrag löschen">✕</button>
         </li>`;
     }
   }
   const open = items.filter((i) => i.preset && !i.filled_by).length;
-  const note = open ? `<div class="progress-note">${open} ${open === 1 ? "Platz" : "Plätze"} noch frei</div>` : "";
+  const noteParts = [];
+  if (open) noteParts.push(`${open} ${open === 1 ? "Platz" : "Plätze"} noch frei`);
+  if (c.capacity != null) noteParts.push(`${Math.min(freeIdx, c.capacity)}/${c.capacity} Plätze belegt${springerCount ? ` · ${springerCount} Springer` : ""}`);
+  const note = noteParts.length ? `<div class="progress-note">${noteParts.join(" · ")}</div>` : "";
   return `
     <ul class="items eintragen">${rows}</ul>${note}
     <button class="btn link" data-action="entry-add" data-card="${c.id}">+ Eintrag hinzufügen</button>`;
@@ -805,13 +826,18 @@ function renderTabelle(c) {
   const cols = c.table_columns || [];
   const rows = c.table_rows || [];
   const thead = `<tr>${cols.map((col) => `<th>${esc(col)}</th>`).join("")}<th class="col-del"></th></tr>`;
-  const tbody = rows.map((r) => {
+  let springerCount = 0;
+  const tbody = rows.map((r, idx) => {
     const vals = r.cell_values || [];
+    const springer = isSpringer(idx, c.capacity);
+    if (springer) springerCount++;
     const cells = cols.map((_, i) => `
       <td><input type="text" maxlength="200" data-action="cell-edit" data-row="${r.id}" data-col="${i}" value="${esc(vals[i] ?? "")}"></td>`).join("");
-    return `<tr>${cells}<td class="col-del"><button class="icon-btn" data-action="row-delete" data-row="${r.id}" title="Zeile löschen">✕</button></td></tr>`;
+    return `<tr class="${springer ? "is-springer" : ""}">${cells}<td class="col-del">${springer ? SPRINGER_BADGE : ""}<button class="icon-btn" data-action="row-delete" data-row="${r.id}" title="Zeile löschen">✕</button></td></tr>`;
   }).join("");
   const empty = rows.length ? "" : `<p class="progress-note">Noch keine Zeilen.</p>`;
+  const note = c.capacity != null && rows.length
+    ? `<div class="progress-note">${Math.min(rows.length, c.capacity)}/${c.capacity} Plätze belegt${springerCount ? ` · ${springerCount} Springer` : ""}</div>` : "";
   return `
     <div class="table-wrap">
       <table class="data-table">
@@ -819,7 +845,7 @@ function renderTabelle(c) {
         <tbody>${tbody}</tbody>
       </table>
     </div>
-    ${empty}
+    ${empty}${note}
     <button class="btn link" data-action="row-add" data-card="${c.id}">+ Zeile hinzufügen</button>`;
 }
 
@@ -865,15 +891,22 @@ function renderUmfrage(c) {
   }
 
   for (const o of opts) {
-    const n = (o.poll_votes || []).length;
+    // Kontingent/Springer (Nutzerwunsch 14.09.2026): Reihenfolge der
+    // Stimmen für diese Option nach Zeitpunkt, ab o.capacity gilt eine
+    // weitere Stimme als "Springer" — rein informativ, unbeschränkt.
+    const optVotes = [...(o.poll_votes || [])]
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    const n = optVotes.length;
     const pct = totalVotes ? Math.round((n / totalVotes) * 100) : 0;
+    const springerCount = o.capacity != null ? Math.max(0, n - o.capacity) : 0;
+    const capacityNote = o.capacity != null
+      ? `<span class="capacity-note">${Math.min(n, o.capacity)}/${o.capacity} Plätze${springerCount ? ` · ${springerCount} Springer` : ""}</span>` : "";
     // Namentliche Umfrage: wer für diese Option gestimmt hat, steht direkt
     // darunter (für alle sichtbar, mit dem Nutzer so abgestimmt).
-    const names = c.poll_named
-      ? (o.poll_votes || []).map((v) => v.voter_name).filter(Boolean)
-      : [];
-    const namesLine = names.length
-      ? `<div class="poll-voters">${names.map(esc).join(", ")}</div>` : "";
+    const namesLine = c.poll_named && optVotes.length
+      ? `<div class="poll-voters">${optVotes.map((v, i) => v.voter_name
+          ? esc(v.voter_name) + (isSpringer(i, o.capacity) ? ` <span class="springer-badge">Springer</span>` : "")
+          : "").filter(Boolean).join(", ")}</div>` : "";
     html += `
       <div class="poll-opt">
         <div class="bar" style="width:${pct}%"></div>
@@ -881,6 +914,7 @@ function renderUmfrage(c) {
           <span class="grow">${esc(o.label)}${myVotes.has(o.id) ? ` <span class="mine">✓</span>` : ""}</span>
           <span class="count">${n} · ${pct} %</span>
         </div>
+        ${capacityNote}
         ${namesLine}
       </div>`;
   }
@@ -2625,6 +2659,9 @@ function editorFieldsHtml(type, card) {
     html += fieldHtml("Einträge (einer pro Zeile)",
       `<textarea name="items" placeholder="Turnbeutel&#10;Trinkflasche&#10;…"></textarea>`);
     html += `<p class="field-hint">Bei „Selbst eintragen“ sind das die Plätze, die übernommen werden können — das Feld darf auch leer bleiben. Bei „Vorgeben und abhaken“ kann zusätzlich eingetragen werden, wer den Punkt erledigt hat.</p>`;
+    html += fieldHtml("Kontingent — nur bei „Selbst eintragen“ (Plätze für frei hinzugefügte Einträge, leer = kein Limit)",
+      `<input type="number" name="capacity" min="1" max="500">`);
+    html += `<p class="field-hint">Wer sich frei einträgt, nachdem das Kontingent voll ist, bekommt trotzdem einen Platz — nur als „Springer“ gekennzeichnet (z. B. falls doch noch jemand gebraucht wird).</p>`;
   }
 
   if (type === "liste" && card) {
@@ -2632,17 +2669,25 @@ function editorFieldsHtml(type, card) {
       <div class="edit-items" id="editItems"></div>
       <button type="button" class="btn small" id="editItemAdd">+ Eintrag hinzufügen</button>
       <p class="field-hint" style="margin-top:8px">Achtung: Häkchen bzw. Namen bleiben beim Umbenennen erhalten, beim Löschen eines Eintrags gehen sie verloren.</p>`;
+    if (card.list_mode === "eintragen") {
+      html += fieldHtml("Kontingent (Plätze für frei hinzugefügte Einträge, leer = kein Limit)",
+        `<input type="number" name="capacity" min="1" max="500" value="${card.capacity ?? ""}">`);
+    }
   }
 
   if (type === "tabelle" && !card) {
     html += fieldHtml("Spalten (eine pro Zeile, z. B. Name, Bringt mit) * — max. 6",
       `<textarea name="table_columns" required placeholder="Name&#10;Bringt mit&#10;Uhrzeit"></textarea>`);
     html += `<p class="field-hint">Nach dem Anlegen tragen alle direkt in die Tabelle ein — die Spalten selbst lassen sich danach nicht mehr ändern.</p>`;
+    html += fieldHtml("Kontingent (Plätze — leer = kein Limit)",
+      `<input type="number" name="capacity" min="1" max="500">`);
+    html += `<p class="field-hint">Wer eine Zeile hinzufügt, nachdem das Kontingent voll ist, bekommt trotzdem eine Zeile — nur als „Springer“ gekennzeichnet.</p>`;
   }
 
   if (type === "umfrage" && !card) {
     html += fieldHtml("Optionen (eine pro Zeile, mindestens 2) *",
       `<textarea name="options" required placeholder="Montag&#10;Dienstag&#10;…"></textarea>`);
+    html += `<p class="field-hint">Optional ein Kontingent pro Option: Zahl in Klammern ans Zeilenende, z. B. „Kuchen backen (3)“ — die ersten 3 Stimmen sind reguläre Plätze, weitere sind weiterhin möglich, gelten aber als „Springer“.</p>`;
     html += `
       <label class="field-check">
         <input type="checkbox" name="multi_select">
@@ -2719,6 +2764,8 @@ function renderEditOptions() {
     .map((op, idx) => op.deleted ? "" : `
       <div class="edit-item">
         <input type="text" maxlength="200" data-idx="${idx}" value="${esc(op.label)}">
+        <input type="number" class="edit-item-capacity" min="1" max="500" data-cap-idx="${idx}"
+               value="${op.capacity ?? ""}" placeholder="Kontingent" title="Kontingent (leer = kein Limit)">
         <button type="button" class="icon-btn" data-remove="${idx}" title="Option löschen">✕</button>
       </div>`)
     .join("");
@@ -2734,7 +2781,11 @@ function openEditor(type, card = null, parentId = null) {
       ? (card.list_items || []).map((it) => ({ id: it.id, text: it.text, orig: it.text, deleted: false }))
       : [],
     options: card && type === "umfrage"
-      ? (card.poll_options || []).map((o) => ({ id: o.id, label: o.label, orig: o.label, deleted: false }))
+      ? (card.poll_options || []).map((o) => ({
+          id: o.id, label: o.label, orig: o.label,
+          capacity: o.capacity ?? null, origCapacity: o.capacity ?? null,
+          deleted: false,
+        }))
       : [],
     attachments: [],   // neu hochgeladene Anhänge dieser Sitzung (Hinweis/Termin)
   };
@@ -2780,6 +2831,8 @@ function openEditor(type, card = null, parentId = null) {
     $("editOptions").addEventListener("input", (ev) => {
       const idx = ev.target.dataset.idx;
       if (idx !== undefined) editorState.options[idx].label = ev.target.value;
+      const capIdx = ev.target.dataset.capIdx;
+      if (capIdx !== undefined) editorState.options[capIdx].capacity = ev.target.value ? Number(ev.target.value) : null;
     });
     $("editOptions").addEventListener("click", (ev) => {
       const btn = ev.target.closest("[data-remove]");
@@ -3028,20 +3081,27 @@ async function submitEditor() {
         p.items = String(fd.get("items") || "")
           .split("\n").map((s) => s.trim()).filter(Boolean)
           .map((text) => ({ text }));
+        p.capacity = fd.get("capacity") ? Number(fd.get("capacity")) : null;
       }
 
       if (st.type === "tabelle") {
         p.table_columns = String(fd.get("table_columns") || "")
           .split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 6);
         if (p.table_columns.length < 1) return editorFail("Bitte mindestens eine Spalte angeben.");
+        p.capacity = fd.get("capacity") ? Number(fd.get("capacity")) : null;
       }
 
       if (st.type === "umfrage") {
         p.multi_select = fd.get("multi_select") === "on";
         p.poll_named = fd.get("poll_named") === "on";
+        // Nutzerwunsch 14.09.2026: optionales Kontingent pro Option per
+        // Zahl in Klammern am Zeilenende, z. B. "Kuchen backen (3)".
         p.options = String(fd.get("options") || "")
           .split("\n").map((s) => s.trim()).filter(Boolean)
-          .map((label) => ({ label }));
+          .map((line) => {
+            const m = line.match(/^(.*\S)\s*\((\d+)\)$/);
+            return m ? { label: m[1].trim(), capacity: Number(m[2]) } : { label: line };
+          });
         if (p.options.length < 2) return editorFail("Bitte mindestens 2 Optionen angeben.");
       }
 
@@ -3068,6 +3128,9 @@ async function submitEditor() {
       }
       if ((st.type === "hinweis" || st.type === "termin") && st.attachments.length) {
         p.attachments = st.attachments;
+      }
+      if (st.type === "liste" && st.card.list_mode === "eintragen") {
+        p.capacity = fd.get("capacity") ? Number(fd.get("capacity")) : null;
       }
       if (st.type === "umfrage") {
         // So viele Optionen blieben nach dem Speichern übrig: bestehende
@@ -3101,13 +3164,13 @@ async function submitEditor() {
         for (const op of st.options) {
           const label = op.label.trim();
           if (!op.id && !op.deleted && label) {
-            await rpc("add_poll_option", { p_card_id: st.card.id, p_label: label });
+            await rpc("add_poll_option", { p_card_id: st.card.id, p_label: label, p_capacity: op.capacity });
           }
         }
         for (const op of st.options) {
           const label = op.label.trim();
-          if (op.id && !op.deleted && label && label !== op.orig) {
-            await rpc("update_poll_option", { p_option_id: op.id, p_label: label });
+          if (op.id && !op.deleted && label && (label !== op.orig || op.capacity !== op.origCapacity)) {
+            await rpc("update_poll_option", { p_option_id: op.id, p_label: label, p_capacity: op.capacity });
           }
         }
         for (const op of st.options) {

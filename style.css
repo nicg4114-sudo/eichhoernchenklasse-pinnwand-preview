@@ -1485,6 +1485,7 @@ main {
   gap: 10px;
 }
 .items.eintragen .who { justify-self: end; }
+.who-wrap { display: flex; align-items: center; gap: 6px; justify-self: end; }
 
 .items .who {
   color: var(--ok);
@@ -1592,6 +1593,28 @@ main {
   font-size: .8rem;
   color: var(--muted);
 }
+/* Kontingent/Springer (Nutzerwunsch 14.09.2026) — Umfrage-Option,
+   Liste ("eintragen") und Tabelle teilen sich dieselbe Badge-Optik. */
+.springer-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: .68rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-beteiligung) 16%, transparent);
+  color: var(--c-beteiligung);
+  white-space: nowrap;
+}
+.capacity-note {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-top: 4px;
+  font-size: .78rem;
+  color: var(--muted);
+}
+.data-table tr.is-springer td { background: color-mix(in srgb, var(--c-beteiligung) 6%, transparent); }
 /* Namenseingabe beim Abstimmen einer namentlichen Umfrage — eigene Optik
    statt .who-input (dort rechtsbündig/grün für "wer hat's erledigt",
    hier eine normale Texteingabe für den eigenen Namen). */
@@ -2001,6 +2024,7 @@ main {
   padding: 8px 12px;
   font: inherit;
 }
+.edit-item input.edit-item-capacity { flex: 0 0 84px; }
 
 /* ---------- Hinweis-Editor (Formatierungsleiste + Bild-/Datei-Upload) ---------- */
 
