@@ -3724,7 +3724,13 @@ async function togglePush() {
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(cfg.VAPID_PUBLIC_KEY),
     });
-    await rpc("save_push_subscription", { p: sub.toJSON() });
+    // Nutzerwunsch 17.09.2026: nur Klassen-Link-Geräte (classLocked) auf
+    // ihre feste Klasse einschränken — Hauptlink-Geräte (Lehrkraft/
+    // Elternsprecher) bekommen weiterhin alles gemeldet, deshalb hier
+    // bewusst kein activeClassId (das wäre nur der gerade gewählte Filter,
+    // keine feste Zugehörigkeit).
+    const pushClassId = classLocked ? activeClassId : null;
+    await rpc("save_push_subscription", { p: { ...sub.toJSON(), class_id: pushClassId } });
     setBellState(true);
     toast("Benachrichtigungen aktiviert.");
   } catch (err) {
