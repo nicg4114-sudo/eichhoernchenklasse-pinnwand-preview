@@ -759,8 +759,11 @@ main {
   font-weight: 800;
   font-size: .85rem;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.2;
 }
 .dash-tile-termin-time { font-size: .74rem; opacity: .9; }
 

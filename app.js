@@ -2365,8 +2365,15 @@ function syncHistory() {
 // gruppiert die Treffer nach Rubrik. Bewusst rein clientseitig — die
 // Kartenliste liegt (wie überall sonst in der App) schon vollständig im
 // Speicher, ein eigener Server-Endpunkt wäre hier unnötig.
+const elEntityDecoder = document.createElement("textarea");
 function stripTags(html) {
-  return String(html ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  const noTags = String(html ?? "").replace(/<[^>]*>/g, " ");
+  // Entitäten wie "&nbsp;"/"&amp;" blieben bisher als Rohtext stehen (z. B.
+  // in den Suchergebnissen sichtbar) — ein <textarea> dekodiert sie, ohne
+  // (anders als bei innerHTML auf einem normalen Element) den Text erneut
+  // als HTML zu interpretieren.
+  elEntityDecoder.innerHTML = noTags;
+  return elEntityDecoder.value.replace(/\s+/g, " ").trim();
 }
 
 function renderSearchResults(query) {
