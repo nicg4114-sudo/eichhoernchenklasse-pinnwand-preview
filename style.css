@@ -1116,12 +1116,19 @@ main {
 .menu summary {
   list-style: none;
   cursor: pointer;
+  /* Council-Review 18.09.2026: von ~34x28px auf 44x44px — das "..."-Menü
+     ist der meistgenutzte Admin-Button überhaupt (auf jeder einzelnen
+     Karte). min-width/min-height statt fixer Größe, damit ein größeres
+     SVG (falls je geändert) nicht abgeschnitten wird. */
+  min-width: 44px;
+  min-height: 44px;
   padding: 5px 8px;
   border-radius: 8px;
   color: var(--muted);
   user-select: none;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 .menu summary svg { width: 18px; height: 18px; display: block; }
 .menu summary::-webkit-details-marker { display: none; }
@@ -1253,6 +1260,17 @@ main {
   margin-bottom: 10px;
 }
 .cal-head b { text-transform: capitalize; }
+/* Council-Review 18.09.2026: nur die Monats-Pfeile hier auf Touch-Größe
+   heben, nicht die generische .icon-btn (die auch für schmale ✕-Löschen-
+   Spalten in Tabellen/Listen genutzt wird — dort würde 44px die Spalte
+   unnötig aufblähen). */
+.cal-head .icon-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .cal-head .icon-btn svg { width: 18px; height: 18px; display: block; }
 .cal-weekdays {
   display: flex;
@@ -2116,8 +2134,10 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  /* Council-Review 18.09.2026: von 32px auf 44px (Touch-Mindestgröße) —
+     .rte-toolbar hat flex-wrap:wrap, bricht bei Bedarf automatisch um. */
+  width: 44px;
+  height: 44px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: none;

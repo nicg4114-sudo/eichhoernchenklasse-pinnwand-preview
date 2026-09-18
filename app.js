@@ -1352,7 +1352,7 @@ function renderTerminAufgabenRow(termine, list) {
         <span class="dash-tile-termin-label">Nächster Termin:</span>
         <span class="dash-tile-termin-date">${d.getDate()}. ${MONTH_SHORT[d.getMonth()]}</span>
         <span class="dash-tile-termin-title">${esc(next.title)}</span>
-        ${next.event_time ? `<span class="dash-tile-termin-time">${esc(fmtTime(next.event_time))} Uhr</span>` : ""}
+        ${next.event_time ? `<span class="dash-tile-termin-time">${esc(fmtTime(next.event_time))}</span>` : ""}
       </button>`;
   }
 
