@@ -1551,11 +1551,69 @@ function renderFolderView(dateiCards) {
     <button class="btn small" data-action="rename-folder" data-folder="${folder.id}">Umbenennen</button>
     <button class="btn small danger" data-action="delete-folder" data-folder="${folder.id}">Löschen</button>` : "";
   const dot = folder ? `<span class="folder-color-dot"${folderColorStyle(folder.id)}></span>` : "";
+  // Nutzerwunsch 18.09.2026 (Design-Review): reine Foto-Karten (alle
+  // angehängten Dateien sind Bilder) als kompaktes Vorschau-Raster statt
+  // als einzelne volle Karten — vorher musste man für z. B. 9 Fotos durch
+  // 9 fast bildschirmfüllende Karten scrollen, jede mit einer redundanten
+  // Dateiname/Größe-Box unter dem großen Bild. Karten mit PDFs oder
+  // gemischten Anhängen bleiben unverändert als Liste (dort ist die
+  // Karten-Darstellung mit Titel/Beschreibung sinnvoll).
+  const isPhotoCard = (c) => {
+    const files = c.files || [];
+    return files.length > 0 && files.every((f) => f.mime_type.startsWith("image/"));
+  };
+  const photoCards = items.filter(isPhotoCard);
+  const otherCards = items.filter((c) => !isPhotoCard(c));
+  const photoGrid = photoCards.length
+    ? `<div class="photo-grid">${photoCards.map(renderPhotoGridTile).join("")}</div>` : "";
+  const otherList = otherCards.map(renderCard).join("");
+
   return backHead("Ordner", "open-folder-grid", manage)
     + `<h2 class="group-label" style="margin:4px 2px 12px">${dot}${esc(folder ? folder.name : "Ohne Ordner")}</h2>`
     + `<div class="group-body">${items.length
-        ? items.map(renderCard).join("")
+        ? photoGrid + otherList
         : `<p class="rubrik-panel-empty">Noch keine Datei in diesem Ordner.</p>`}</div>`;
+}
+
+// Eine Foto-Kachel im Vorschau-Raster (siehe renderFolderView) — zeigt das
+// erste angehängte Bild, "+N" bei mehreren, und dieselben Admin-Aktionen
+// wie renderCard() (Bearbeiten/Verschieben/Anpinnen/Archiv/Löschen), nur
+// kompakter über ein "..."-Menü in der Ecke statt im card-top-Streifen.
+function renderPhotoGridTile(c) {
+  const files = c.files || [];
+  const first = files[0];
+  const url = fileUrl(first.storage_path);
+  const extra = files.length - 1;
+  const inTrash = !!c.trashed_at;
+  let menu;
+  if (inTrash) {
+    menu = `
+      <button data-action="restore" data-card="${c.id}">Wiederherstellen</button>
+      <button class="danger" data-action="delete-forever" data-card="${c.id}">Endgültig löschen</button>`;
+  } else {
+    const archiveBtn = isArchived(c)
+      ? `<button data-action="unarchive-card" data-card="${c.id}">Aus Archiv zurückholen</button>`
+      : `<button data-action="archive-card" data-card="${c.id}">In Archiv verschieben</button>`;
+    menu = `
+      <button data-action="edit" data-card="${c.id}">Bearbeiten</button>
+      <button data-action="move-file" data-card="${c.id}">In Ordner verschieben</button>
+      <button data-action="pin" data-card="${c.id}">${c.pinned ? "Nicht mehr anpinnen" : "Oben anpinnen"}</button>
+      ${archiveBtn}
+      <button class="danger" data-action="trash" data-card="${c.id}">Löschen</button>`;
+  }
+  return `
+    <div class="photo-tile ${c.pinned && !inTrash ? "pinned" : ""}">
+      <a class="photo-tile-link" href="${url}" target="_blank" rel="noopener noreferrer">
+        <img class="photo-tile-img" src="${url}" alt="${esc(c.title)}" loading="lazy">
+        ${extra > 0 ? `<span class="photo-tile-more">+${extra}</span>` : ""}
+      </a>
+      ${!isAdmin() ? "" : `
+      <details class="menu photo-tile-menu">
+        <summary title="Aktionen">${ICONS.menu}</summary>
+        <div class="menu-list">${menu}</div>
+      </details>`}
+      ${c.title ? `<div class="photo-tile-caption">${esc(c.title)}</div>` : ""}
+    </div>`;
 }
 
 /* ---------- Kalender & Stundenplan (ideen-backlog.md #11) ---------- */
@@ -1603,13 +1661,6 @@ function recurringForDate(dateStr, weekday) {
 function termineForDate(dateStr) {
   return cards.filter((c) =>
     c.type === "termin" && !c.trashed_at && c.event_date === dateStr && inActiveClass(c));
-}
-
-// Kurzer Titel-Ausschnitt für die Kalendertageszelle — Platz ist dort
-// sehr knapp, ganze Titel würden umbrechen und das Raster aufreißen.
-function shortenTitle(title, max = 12) {
-  const t = String(title || "");
-  return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
 // ISO-8601-Kalenderwoche (Woche 1 enthält den ersten Donnerstag des Jahres)
@@ -1676,14 +1727,19 @@ function renderKalenderMonth() {
       // Woche gleich, bräuchten sonst zu viel Platz in jeder Zelle).
       const dayTermine = holiday ? [] : termineForDate(dateStr);
       const recurring = holiday ? [] : recurringForDate(dateStr, weekday);
-      const chips = dayTermine.slice(0, 2).map((t) =>
-        `<span class="cal-day-chip">${esc(shortenTitle(t.title))}</span>`).join("");
-      const more = dayTermine.length > 2
-        ? `<span class="cal-day-chip cal-day-chip-more">+${dayTermine.length - 2}</span>` : "";
+      // Nutzerwunsch 18.09.2026 (Design-Review): abgeschnittener Titel-Text
+      // ("3. Elt…") war in der kleinen Kalenderzelle nicht lesbar UND stand
+      // direkt darüber der ausführlichen Liste doppelt — jetzt wie in
+      // praktisch jedem Kalender (Google, Apple, Outlook) nur ein kleiner
+      // Punkt pro Termin an diesem Tag, maximal 3 + "+N". Die Liste
+      // darunter bleibt die eigentliche, lesbare Quelle.
+      const dotCount = Math.min(dayTermine.length, 3);
+      const dots = dayTermine.slice(0, dotCount).map(() => `<span class="cal-day-termin-dot"></span>`).join("");
+      const moreDot = dayTermine.length > 3 ? `<span class="cal-day-termin-more">+${dayTermine.length - 3}</span>` : "";
       weekCells += `
-        <button type="button" class="${cls}" data-action="cal-day" data-date="${dateStr}" title="${holiday ? esc(holiday.label) : ""}">
+        <button type="button" class="${cls}" data-action="cal-day" data-date="${dateStr}" title="${holiday ? esc(holiday.label) : dayTermine.map((t) => t.title).join(", ")}">
           <span class="cal-day-num">${d.getDate()}</span>
-          ${chips || more ? `<span class="cal-day-chips">${chips}${more}</span>` : ""}
+          ${dots || moreDot ? `<span class="cal-day-termin-dots">${dots}${moreDot}</span>` : ""}
           ${recurring.length ? `<span class="cal-day-dot cal-day-dot-recurring" title="Wiederkehrendes Ereignis"></span>` : ""}
         </button>`;
       dayCount++;
