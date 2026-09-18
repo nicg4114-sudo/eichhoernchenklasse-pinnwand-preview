@@ -127,6 +127,11 @@ body {
 
 button { font: inherit; color: inherit; }
 
+/* ideen-backlog.md #43 (Council-Feature-Idee): "Große Schrift"-Umschalter im
+   Mehr-Menü, gemerkt per localStorage — da fast alle Größen im rem gesetzt
+   sind, skaliert eine höhere Basis-Schriftgröße die ganze App mit. */
+body.grosse-schrift { font-size: 19px; }
+
 h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01em; }
 
 /* ---------- Kopfzeile ---------- */
@@ -331,6 +336,18 @@ main {
   box-shadow: var(--shadow);
 }
 .notice code { background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 4px; }
+
+.offline-banner {
+  background: #fdecec;
+  border: 1px solid #f2b8b8;
+  color: #7a2020;
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  font-size: .88rem;
+  font-weight: 600;
+  text-align: center;
+}
 
 .empty {
   text-align: center;
@@ -1044,6 +1061,17 @@ main {
   font-weight: 600;
 }
 .pin-flag svg { width: 13px; height: 13px; display: block; }
+
+.ends-soon-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: .75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-termin, #c0522d) 16%, transparent);
+  color: var(--c-termin, #c0522d);
+}
 
 .important-flag {
   display: inline-flex;
@@ -1951,6 +1979,19 @@ main {
 }
 .more-item:hover { background: var(--bg); }
 .more-item svg { width: 20px; height: 20px; flex: 0 0 auto; color: var(--muted); }
+.more-item-badge:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--important);
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 800;
+}
 
 /* Eltern-Feedback, Admin-Ansicht (siehe #dlgFeedback, renderFeedbackList). */
 .feedback-item { padding: 12px 0; border-top: 1px solid var(--line); }

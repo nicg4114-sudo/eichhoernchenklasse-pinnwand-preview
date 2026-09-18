@@ -238,6 +238,7 @@ const $ = (id) => document.getElementById(id);
 const elFeed = $("feed");
 const elEmpty = $("empty");
 const elNotice = $("notice");
+const elOfflineBanner = $("offlineBanner");
 const elFab = $("fab");
 const elMain = document.querySelector("main");
 const elScrollTopBtn = $("scrollTopBtn");
@@ -253,6 +254,9 @@ const dlgVersion = $("dlgVersion");
 const elVersionBtn = $("moreVersionBtn");
 const dlgMore = $("dlgMore");
 const elMoreBtn = $("moreBtn");
+const elFeedbackBadge = $("moreFeedbackBadge");
+const elFontSizeBtn = $("moreFontSizeBtn");
+const elFontSizeBtnLabel = $("moreFontSizeBtnLabel");
 const elAdminBtn = $("moreAdminBtn");
 const elAdminBtnLabel = $("moreAdminBtnLabel");
 const elArchivBtn = $("moreArchivBtn");
@@ -344,6 +348,22 @@ function isArchived(c) {
 function expiryDate(c) {
   if (c.type === "termin" && c.event_date) return c.event_date;
   return c.end_date || null;
+}
+
+// ideen-backlog.md #43 (Council-Feature-Idee): dezenter Hinweis, wenn ein
+// Termin oder eine Frist (end_date) innerhalb der nächsten 48 Std. endet —
+// hilft, knapp befristete Umfragen/Termine nicht zwischen anderen Karten zu
+// übersehen. Reine Anzeigelogik anhand vorhandener Datumsfelder, keine
+// Datenbank-Änderung nötig.
+function endsSoonBadge(c) {
+  const dateStr = expiryDate(c);
+  if (!dateStr) return "";
+  const target = parseISODate(dateStr);
+  const now = todayStart();
+  const hoursLeft = (target - now) / 36e5;
+  if (hoursLeft < 0 || hoursLeft > 48) return "";
+  const label = hoursLeft < 24 ? "endet heute" : "endet morgen";
+  return `<span class="ends-soon-badge">${esc(label)}</span>`;
 }
 
 // Sortierschlüssel fürs Dashboard: Wichtig zuerst, danach nach Datum
@@ -474,9 +494,12 @@ function googleCalUrl(c) {
 }
 
 let toastTimer = null;
+// ideen-backlog.md #43 (Council-Finding): einheitlicher Fallback zentral
+// hier statt an jeder Aufrufstelle einzeln — sonst zeigt ein Fehler ohne
+// .message (z. B. ein TypeError) buchstäblich "undefined" im Toast.
 function toast(msg, isError = false) {
   const el = $("toast");
-  el.textContent = msg;
+  el.textContent = msg || (isError ? "Etwas ist schiefgelaufen." : "");
   el.classList.toggle("error", isError);
   el.hidden = false;
   clearTimeout(toastTimer);
@@ -665,6 +688,21 @@ async function uploadFile(file) {
   return { storage_path: path, filename: file.name, mime_type: file.type, size_bytes: file.size };
 }
 
+// ideen-backlog.md #43 (Council-Performance-Finding): der stille 60-Sekunden-
+// Auto-Reload hat bisher bei JEDEM Tick komplett neu gerendert, auch wenn
+// sich nichts geändert hat — riss aufgeklappte Hinweis-Karten zu und ließ
+// die Scrollposition springen. Ein einfacher Signatur-Vergleich der frisch
+// geladenen Daten entscheidet jetzt, ob ein Rerender überhaupt nötig ist.
+// Bewusst kein `updated_at`-Vergleich (wäre günstiger), weil Stimmen/Zeilen/
+// Listeneinträge das `updated_at` der Karte selbst nicht anheben — ein
+// JSON.stringify-Vergleich ist immer noch um Größenordnungen billiger als
+// das komplette Neu-Rendern. Ein erzwungener Render alle 10 Minuten fängt
+// rein zeitabhängige Anzeigen ab (z. B. "endet heute"/"endet morgen",
+// Tageswechsel), die sich ohne Datenänderung sonst nie aktualisieren würden.
+let lastReloadSignature = null;
+let lastForcedRenderAt = 0;
+const FORCE_RENDER_INTERVAL_MS = 10 * 60 * 1000;
+
 async function reload({ silent = false } = {}) {
   try {
     // Scheitert das Laden von Ordnern/Stundenplan/Ferien (z. B. Migration
@@ -675,6 +713,11 @@ async function reload({ silent = false } = {}) {
       fetchRecurringEvents().catch(() => recurringEvents),
       fetchSchoolHolidays().catch(() => schoolHolidays),
     ]);
+    const signature = JSON.stringify([cardsData, foldersData, slotsData, recurringData, holidaysData]);
+    const now = Date.now();
+    const mustForceRender = now - lastForcedRenderAt > FORCE_RENDER_INTERVAL_MS;
+    const unchanged = silent && loaded && !pendingCardId && signature === lastReloadSignature && !mustForceRender;
+
     cards = cardsData;
     foldersList = foldersData;
     scheduleSlots = slotsData;
@@ -682,6 +725,10 @@ async function reload({ silent = false } = {}) {
     schoolHolidays = holidaysData;
     loaded = true;
     elNotice.hidden = true;
+    lastReloadSignature = signature;
+
+    if (unchanged) return;
+    lastForcedRenderAt = now;
     // Nur beim allerersten erfolgreichen Laden relevant — danach ist
     // pendingCardId schon geleert. openCardById() ruft render() selbst auf.
     if (pendingCardId) {
@@ -926,6 +973,18 @@ function renderUmfrage(c) {
   return html;
 }
 
+// ideen-backlog.md #43 (Council-Finding): gemeinsamer Baustein für eine
+// Datei-Zeile (Icon + Name + Größe) statt derselben Markup-Zeile zweimal
+// gepflegt in renderDatei() und renderHinweisAttachments().
+function fileRowHtml(f) {
+  const url = fileUrl(f.storage_path);
+  return `
+    <a class="file-row" href="${url}" target="_blank" rel="noopener noreferrer">
+      <span class="file-icon">${f.mime_type === "application/pdf" ? ICONS.datei : ICONS.image}</span>
+      <span><b>${esc(f.filename)}</b><span>${fmtSize(f.size_bytes)}</span></span>
+    </a>`;
+}
+
 function renderDatei(c) {
   let html = "";
   for (const f of c.files || []) {
@@ -936,11 +995,7 @@ function renderDatei(c) {
           <img class="file-thumb" src="${url}" alt="${esc(f.filename)}" loading="lazy">
         </a>`;
     }
-    html += `
-      <a class="file-row" href="${url}" target="_blank" rel="noopener noreferrer">
-        <span class="file-icon">${f.mime_type === "application/pdf" ? ICONS.datei : ICONS.image}</span>
-        <span><b>${esc(f.filename)}</b><span>${fmtSize(f.size_bytes)}</span></span>
-      </a>`;
+    html += fileRowHtml(f);
   }
   return html || `<p class="progress-note">Keine Datei vorhanden.</p>`;
 }
@@ -952,14 +1007,7 @@ function renderHinweisAttachments(c) {
   const extra = (c.files || []).filter((f) => !body.includes(f.storage_path));
   if (!extra.length) return "";
   let html = `<div class="hinweis-attachments">`;
-  for (const f of extra) {
-    const url = fileUrl(f.storage_path);
-    html += `
-      <a class="file-row" href="${url}" target="_blank" rel="noopener noreferrer">
-        <span class="file-icon">${f.mime_type === "application/pdf" ? ICONS.datei : ICONS.image}</span>
-        <span><b>${esc(f.filename)}</b><span>${fmtSize(f.size_bytes)}</span></span>
-      </a>`;
-  }
+  for (const f of extra) html += fileRowHtml(f);
   return html + `</div>`;
 }
 
@@ -1042,6 +1090,7 @@ function renderCard(c, opts) {
     <article class="card ${c.pinned && !inTrash ? "pinned" : ""} ${inTrash ? "trashed" : ""} ${opts && opts.nested ? "nested" : ""}" data-card="${c.id}">
       <div class="card-top">
         <span class="type-badge ${c.type}">${TYPE_LABELS[c.type]}</span>
+        ${!inTrash ? endsSoonBadge(c) : ""}
         ${c.pinned && !inTrash ? `<span class="pin-flag">${ICONS.pin}Angepinnt</span>` : ""}
         ${!inTrash ? classChipHtml(c) : ""}
         <span class="spacer"></span>
@@ -1471,7 +1520,12 @@ function renderFolderView(dateiCards) {
     };
     // Gemeinsame Ordner (class_id null) sind in jeder Klassenansicht
     // sichtbar — gleiches Prinzip wie inActiveClass() bei Karten.
-    const foldersHere = foldersList.filter((f) => !activeClassId || !f.class_id || f.class_id === activeClassId);
+    // ideen-backlog.md #43 (Council-Feature-Idee): alphabetisch statt nach
+    // Erstellungsreihenfolge — erleichtert das Wiederfinden bei vielen
+    // Ordnern (Klassenlisten, Elternbriefe, Fotos, Formulare …).
+    const foldersHere = foldersList
+      .filter((f) => !activeClassId || !f.class_id || f.class_id === activeClassId)
+      .sort((a, b) => a.name.localeCompare(b.name, "de"));
     const tiles = foldersHere.map((f) => folderTile(f.id, f.class_id ? f.name : `🏫 ${f.name}`)).join("")
       + folderTile("", "Ohne Ordner")
       + (!isAdmin() ? "" : `
@@ -1853,6 +1907,25 @@ async function loadFeedbackEntries() {
   if (view === "feedback") render();
 }
 
+// ideen-backlog.md #43 (Council-Feature-Idee): kleiner Zähler am
+// "Feedback"-Menüpunkt, solange ungelesene Elternnachrichten vorliegen —
+// nur beim Öffnen des "Mehr"-Menüs abgefragt (kein zusätzliches Polling),
+// nur für Admins relevant.
+async function refreshFeedbackBadge() {
+  if (!elFeedbackBadge || !isAdmin()) {
+    if (elFeedbackBadge) elFeedbackBadge.hidden = true;
+    return;
+  }
+  try {
+    const entries = await rpc("list_feedback", {});
+    const unread = Array.isArray(entries) ? entries.filter((f) => !f.read_at).length : 0;
+    elFeedbackBadge.textContent = String(unread);
+    elFeedbackBadge.hidden = unread === 0;
+  } catch {
+    elFeedbackBadge.hidden = true;
+  }
+}
+
 function renderFeedbackView() {
   if (!isAdmin()) {
     return `
@@ -2217,6 +2290,12 @@ function wireHinweisCarousel() {
   // sichtbarer Ausschnitt, bekommen einen "Mehr anzeigen"-Knopf (#2 aus
   // ideen-backlog.md) — nur wenn wirklich nötig, damit kurze Hinweise
   // ohne unnötigen Knopf bleiben.
+  // ideen-backlog.md #43 (Council-Performance-Finding): erst ALLE Karten
+  // messen (nur lesende Zugriffe), dann erst die Buttons einfügen (nur
+  // schreibende Zugriffe) — sonst dirty ein appendChild() das Layout und
+  // erzwingt für jede folgende Karte in derselben Schleife einen erneuten
+  // synchronen Reflow (Layout-Thrashing).
+  const cardsNeedingButton = [];
   elFeed.querySelectorAll(".hinweis-slide > .card").forEach((card) => {
     if (card.classList.contains("expanded") || card.querySelector(".hinweis-expand-btn")) return;
     // Gemessen wird der geklippte Inhalt (.card-clip), nicht mehr die
@@ -2224,6 +2303,9 @@ function wireHinweisCarousel() {
     // und darf die Messung nicht verfälschen (siehe #20).
     const clip = card.querySelector(".card-clip");
     if (clip.scrollHeight <= clip.clientHeight + 2) return;
+    cardsNeedingButton.push(card);
+  });
+  cardsNeedingButton.forEach((card) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "hinweis-expand-btn";
@@ -3028,7 +3110,7 @@ function rteInsertLink(editor) {
 
 function editorFail(msg) {
   const el = $("editorError");
-  el.textContent = msg;
+  el.textContent = msg || "Speichern fehlgeschlagen.";
   el.hidden = false;
   $("editorSubmit").disabled = false;
   $("editorSubmit").textContent = "Speichern";
@@ -3740,9 +3822,40 @@ async function togglePush() {
   }
 }
 
+/* ---------- Verbindungsstatus (Council-Feature-Idee #43) ---------- */
+// Reiner Hinweis-Banner bei fehlendem Netz — die App selbst funktioniert
+// dann nicht mehr (keine Backend-Anbindung ohne Netz), aber ohne Hinweis
+// wirkt sie für Eltern nur "leer/eingefroren" statt erklärt.
+
+function updateOfflineBanner() {
+  if (elOfflineBanner) elOfflineBanner.hidden = navigator.onLine;
+}
+
+/* ---------- Schriftgröße (Council-Feature-Idee #43) ---------- */
+// Barrierefreie Option ohne Systemzoom — eine CSS-Klasse auf <body>,
+// gemerkt per localStorage. Keine Datenbank-Änderung nötig.
+
+const FONT_SIZE_KEY = "pinnwand_grosse_schrift";
+
+function applyFontSizePref() {
+  document.body.classList.toggle("grosse-schrift", localStorage.getItem(FONT_SIZE_KEY) === "1");
+}
+
+function toggleFontSizePref() {
+  const isBig = localStorage.getItem(FONT_SIZE_KEY) === "1";
+  if (isBig) localStorage.removeItem(FONT_SIZE_KEY);
+  else localStorage.setItem(FONT_SIZE_KEY, "1");
+  applyFontSizePref();
+}
+
 /* ---------- Initialisierung ---------- */
 
 async function init() {
+  applyFontSizePref();
+  updateOfflineBanner();
+  window.addEventListener("online", updateOfflineBanner);
+  window.addEventListener("offline", updateOfflineBanner);
+
   // Anker aus der Adressleiste übernehmen, bevor überhaupt etwas gerendert
   // wird ("#karte-…" wird erst gemerkt, siehe pendingCardId in reload()).
   applyInitialHash();
@@ -3855,6 +3968,7 @@ async function init() {
       // nicht nur ungeschrieben-lassen (Nutzerwunsch 11.09.2026).
       if (elArchivBtn) elArchivBtn.hidden = !isAdmin();
       if (elPapierkorbBtn) elPapierkorbBtn.hidden = !isAdmin();
+      refreshFeedbackBadge();
       dlgMore.showModal();
     });
     dlgMore.addEventListener("click", (ev) => {
@@ -3867,6 +3981,16 @@ async function init() {
         render();
       }
       if (ev.target.closest("[data-close]")) dlgMore.close();
+    });
+  }
+
+  if (elFontSizeBtn) {
+    elFontSizeBtnLabel.textContent =
+      localStorage.getItem(FONT_SIZE_KEY) === "1" ? "Normale Schrift" : "Große Schrift";
+    elFontSizeBtn.addEventListener("click", () => {
+      toggleFontSizePref();
+      elFontSizeBtnLabel.textContent =
+        localStorage.getItem(FONT_SIZE_KEY) === "1" ? "Normale Schrift" : "Große Schrift";
     });
   }
 
