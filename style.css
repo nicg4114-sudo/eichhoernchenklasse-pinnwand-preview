@@ -1659,6 +1659,12 @@ main {
 /* Kontingent/Springer (Nutzerwunsch 14.09.2026) — Umfrage-Option,
    Liste ("eintragen") und Tabelle teilen sich dieselbe Badge-Optik. */
 .springer-badge {
+  /* Council-Review 18.09.2026: jetzt ein <button> statt <span> (antippbare
+     Erklärung, siehe SPRINGER_BADGE) — native Button-Optik zurücksetzen,
+     damit es weiterhin wie ein reines Badge aussieht. */
+  font: inherit;
+  border: none;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   font-size: .68rem;

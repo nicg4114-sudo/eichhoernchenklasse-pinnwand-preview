@@ -173,6 +173,7 @@
 <dialog id="dlgPrompt" class="dlg small">
   <form id="promptForm" novalidate>
     <h2 id="promptTitle"></h2>
+    <p id="promptHint" class="rubrik-panel-hint" hidden></p>
     <div id="promptFields"></div>
     <div class="dlg-actions">
       <button type="button" class="btn ghost" data-close>Abbrechen</button>
@@ -203,7 +204,10 @@
      unabhängig vom ein-/ausklappbaren Begrüßungsblock (#14). -->
 <dialog id="dlgSplash" class="dlg small">
   <h2 id="splashTitle">Herzlich willkommen</h2>
-  <p>Schön, dass du vorbeischaust — hier findest du alles Organisatorische rund um die Klasse.</p>
+  <!-- Nutzerwunsch 18.09.2026 (Alltagstauglichkeits-Review): statt reinem
+       "Happy Talk" (der bisherige Satz sagte nichts Handlungsrelevantes)
+       direkt zeigen, was hier zu finden ist. -->
+  <p>Hier findest du: aktuelle Hinweise und Termine, zum Abstimmen/Eintragen bei Umfragen und Listen, sowie Dateien wie Elternbriefe und Formulare.</p>
   <label class="field-checkbox">
     <input type="checkbox" id="splashHideCheckbox">
     <span>Nicht mehr anzeigen</span>

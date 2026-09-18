@@ -801,7 +801,12 @@ function renderTermin(c, inTrash) {
 function isSpringer(index, capacity) {
   return capacity != null && index >= capacity;
 }
-const SPRINGER_BADGE = `<span class="springer-badge" title="Kontingent voll — zusätzlicher Springer">Springer</span>`;
+// Nutzerwunsch 18.09.2026 (Alltagstauglichkeits-Review): "title" allein
+// zeigt die Erklärung nur bei Hover mit der Maus — auf dem Handy (also für
+// die meisten Eltern) gibt es kein Hover, das Wort "Springer" stünde ohne
+// jede Erklärung da. Jetzt ein antippbarer Button, der die Erklärung als
+// Toast zeigt; title bleibt als Bonus für Maus-Nutzer erhalten.
+const SPRINGER_BADGE = `<button type="button" class="springer-badge" data-action="explain-springer" title="Kontingent voll — zusätzlicher Springer">Springer</button>`;
 
 function renderListe(c) {
   const items = c.list_items || [];
@@ -915,7 +920,8 @@ function renderUmfrage(c) {
         <div class="poll-opt">
           <div class="row">
             <label class="grow">
-              <input type="${inputType}" name="poll-${c.id}" value="${o.id}" ${myVotes.has(o.id) ? "checked" : ""}>
+              <input type="${inputType}" name="poll-${c.id}" value="${o.id}" ${myVotes.has(o.id) ? "checked" : ""}
+                ${c.multi_select || c.poll_named ? "" : `data-action="vote-submit-radio" data-card="${c.id}"`}>
               <span class="grow">${esc(o.label)}</span>
             </label>
           </div>
@@ -930,7 +936,9 @@ function renderUmfrage(c) {
     html += `</div>
       ${nameField}
       <div class="poll-foot">
-        <button class="btn small primary" data-action="vote-submit" data-card="${c.id}">Abstimmen</button>
+        ${c.multi_select || c.poll_named
+          ? `<button class="btn small primary" data-action="vote-submit" data-card="${c.id}">Abstimmen</button>`
+          : ""}
         ${myVotes.size ? `<button class="btn link" data-action="vote-retract" data-card="${c.id}">Stimme zurückziehen</button>` : ""}
         <span>${c.multi_select ? "Mehrfachauswahl möglich" : "Eine Option wählbar"} · ${voters} ${voters === 1 ? "Stimme" : "Stimmen"}</span>
       </div>`;
@@ -952,7 +960,7 @@ function renderUmfrage(c) {
     // darunter (für alle sichtbar, mit dem Nutzer so abgestimmt).
     const namesLine = c.poll_named && optVotes.length
       ? `<div class="poll-voters">${optVotes.map((v, i) => v.voter_name
-          ? esc(v.voter_name) + (isSpringer(i, o.capacity) ? ` <span class="springer-badge">Springer</span>` : "")
+          ? esc(v.voter_name) + (isSpringer(i, o.capacity) ? ` ${SPRINGER_BADGE}` : "")
           : "").filter(Boolean).join(", ")}</div>` : "";
     html += `
       <div class="poll-opt">
@@ -1259,7 +1267,7 @@ async function maybeShowAdminLogin() {
   for (;;) {
     const vals = await promptDlg("Admin-Zugang", [
       { name: "code", label: "Admin-Passwort", type: "password", placeholder: "Passwort" },
-    ]);
+    ], "Nur für Lehrkraft/Elternsprecher — als Elternteil brauchst du das normalerweise nicht, einfach auf „Abbrechen” tippen.");
     if (!vals) return;
     let ok = false;
     try {
@@ -2633,10 +2641,17 @@ function confirmDlg(text, okLabel = "Löschen") {
 // fields: Array von { name, label?, placeholder?, maxlength?, value?, optional? }
 //         oder, für eine Auswahlliste statt Textfeld: { name, label?, value?,
 //         options: [{ value, label }, ...] }.
+// hint: optionaler erklärender Satz zwischen Titel und Feldern (Nutzerwunsch
+// 18.09.2026, Alltagstauglichkeits-Review — z. B. beim Admin-Zugang, damit
+// ein neugierig klickendes Elternteil nicht auf ein unerklärtes
+// Passwortfeld trifft).
 // Löst mit einem Objekt { [name]: getrimmter Wert } auf, oder null bei Abbruch.
-function promptDlg(title, fields) {
+function promptDlg(title, fields, hint) {
   return new Promise((resolve) => {
     $("promptTitle").textContent = title;
+    const hintEl = $("promptHint");
+    hintEl.textContent = hint || "";
+    hintEl.hidden = !hint;
     const wrap = $("promptFields");
     wrap.innerHTML = fields.map((f, i) => fieldHtml(f.label || "", f.options
       ? `<select name="${esc(f.name)}" ${i === 0 ? "autofocus" : ""}>${f.options
@@ -3333,6 +3348,13 @@ async function handleFeedClick(ev) {
   if (menu) menu.removeAttribute("open");
 
   if (action === "retry") return reload();
+  // Nutzerwunsch 18.09.2026: Springer-Erklärung antippbar statt nur per
+  // Hover-Tooltip (siehe SPRINGER_BADGE) — vor dem cardId/itemId-Setup und
+  // ohne Reload, da das Badge keine eigene Karten-/Item-Zuordnung braucht.
+  if (action === "explain-springer") {
+    toast("Kontingent voll — zusätzlicher Springer: bereit zu helfen, falls doch noch jemand gebraucht wird.");
+    return;
+  }
 
   const cardId = btn.dataset.card;
   const itemId = btn.dataset.item;
@@ -3608,6 +3630,12 @@ async function handleFeedClick(ev) {
         { p_card_id: cardId, p_option_ids: [], p_device_token: deviceToken }), "Stimme zurückgezogen.");
       break;
     }
+    // Nutzerwunsch 18.09.2026 (Alltagstauglichkeits-Review): bei genau einer
+    // wählbaren Option (kein multi_select, keine Namenspflicht) direkt beim
+    // Antippen abstimmen — der extra "Abstimmen"-Klick war für eine so
+    // triviale Aktion ein unnötiger zweiter Entscheidungsschritt (siehe
+    // data-action an der Stelle, wo das Radio-Input gerendert wird).
+    case "vote-submit-radio":
     case "vote-submit": {
       const chosen = [...elFeed.querySelectorAll(`input[name="poll-${CSS.escape(cardId)}"]:checked`)]
         .map((i) => i.value);
@@ -3813,6 +3841,16 @@ async function togglePush() {
       toast("Benachrichtigungen sind im Browser blockiert — das lässt sich nur in den Browser-/Website-Einstellungen wieder ändern.", true);
       return;
     }
+    // Nutzerwunsch 18.09.2026 (Alltagstauglichkeits-Review): vor der
+    // System-Berechtigungsabfrage erst selbst erklären, wofür sie ist —
+    // sonst kommt der native Browser-Dialog "kalt" und wird von vielen
+    // reflexhaft abgelehnt, was sich danach nur über die Geräteeinstellungen
+    // rückgängig machen lässt (siehe Fehlermeldung oben).
+    const einverstanden = await confirmDlg(
+      "Über neue Hinweise, Termine und Umfragen benachrichtigt werden? Dein Gerät fragt dich gleich um Erlaubnis — du kannst das jederzeit über dieses Glocken-Symbol wieder ausschalten.",
+      "Benachrichtigungen erlauben"
+    );
+    if (!einverstanden) return;
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
       toast("Ohne Erlaubnis können keine Benachrichtigungen geschickt werden.", true);
