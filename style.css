@@ -209,8 +209,8 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
    nur gezeigt, wenn der Browser Push überhaupt unterstützt), gefüllt/farbig
    sobald ein Abo aktiv ist. */
 .push-bell {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   border: none;
   border-radius: 50%;
@@ -235,8 +235,8 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
 
 /* ideen-backlog.md #24: Such-Icon, gleiches Grundmuster wie .push-bell. */
 .icon-btn-round {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   border: none;
   border-radius: 50%;
@@ -554,6 +554,11 @@ main {
   gap: 0;
   scrollbar-width: none;
   border-radius: var(--radius);
+  /* Council-Review 18.09.2026: Höhe wird jetzt per JS auf die sichtbare
+     Karte gesetzt (syncCarouselHeight in wireHinweisCarousel) statt sich
+     aus der höchsten aller Karten zu ergeben — die Übergangsanimation
+     macht den Sprung beim Wischen/Wechseln weniger abrupt. */
+  transition: height .2s ease;
 }
 .hinweis-carousel::-webkit-scrollbar { display: none; }
 .hinweis-slide {
@@ -662,7 +667,11 @@ main {
    den Wechsel per Klick (Desktop ohne Trackpad). */
 .hinweis-counter {
   position: absolute;
-  top: 10px;
+  /* Council-Review 18.09.2026: bei vergrößerten 44px-Pfeilen (siehe
+     .hinweis-arrow) reicht "top: 10px" nicht mehr aus, um den Zähler
+     unterhalb des rechten Pfeils zu halten — beide sitzen bei right:10px
+     in derselben Spalte. */
+  top: 30px;
   right: 10px;
   background: rgba(38, 28, 12, .55);
   color: #fff;
@@ -686,8 +695,12 @@ main {
   position: absolute;
   top: 0;
   transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
+  /* Council-Review 18.09.2026: von 30px auf 44px (Touch-Mindestgröße) —
+     bleibt zentriert auf der Kartenoberkante (top:0 + translateY(-50%)),
+     wächst also symmetrisch nach oben/unten, nie über den Fließtext
+     (siehe Begründung oben zu #18). */
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, .85);
@@ -699,14 +712,15 @@ main {
   box-shadow: var(--shadow);
   z-index: 2;
 }
-.hinweis-arrow svg { width: 16px; height: 16px; }
-.hinweis-arrow.prev { left: 10px; }
+.hinweis-arrow svg { width: 18px; height: 18px; }
+.hinweis-arrow.prev { left: 6px; }
 .hinweis-arrow.prev svg { transform: scaleX(-1); }
-.hinweis-arrow.next { right: 10px; }
+.hinweis-arrow.next { right: 6px; }
 /* Home-Knopf (ideen-backlog.md #38): mittig zwischen den Pfeilen, springt
-   zur ersten Hinweis-Karte zurück — nur ab drei Karten gerendert. */
-.hinweis-arrow.home { left: 50%; transform: translate(-50%, -50%); width: 26px; height: 26px; }
-.hinweis-arrow.home svg { width: 14px; height: 14px; }
+   zur ersten Hinweis-Karte zurück — nur ab drei Karten gerendert. Ebenfalls
+   auf 44px vergrößert (Council-Review 18.09.2026). */
+.hinweis-arrow.home { left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; }
+.hinweis-arrow.home svg { width: 16px; height: 16px; }
 .hinweis-dots {
   display: flex;
   justify-content: center;
@@ -1731,7 +1745,10 @@ main {
 }
 .btn:hover { background: var(--bg); }
 .btn:active { transform: scale(.97); }
-.btn.small { padding: 5px 13px; font-size: .87rem; }
+/* Council-Review 18.09.2026: von 5px auf 9px vertikal (z.B. "Erledigt" bei
+   Aufgaben, Ordner umbenennen/löschen) — näher an der 44px-Touch-Zielgröße,
+   ohne so groß zu wirken wie ein normaler .btn. */
+.btn.small { padding: 9px 13px; font-size: .87rem; }
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -1877,8 +1894,8 @@ main {
    als vorher, da er sich jetzt keinen Platz mehr mit schwebenden Bubbles
    teilen muss. */
 .fab {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   border-radius: 50%;
   border: none;
@@ -1939,6 +1956,13 @@ main {
 .dlg h2 { margin: 0 0 16px; font-size: 1.15rem; font-weight: 800; }
 
 .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* Council-Review 18.09.2026: unter 420px (Dialog-Innenbreite dann < 380px)
+   wird jede Kachel so schmal, dass die Beschreibung dreizeilig umbricht —
+   auf einer Spalte bleibt für Titel+Beschreibung genug Platz, Dialog wird
+   dafür etwas länger (unproblematisch, da er selbst scrollt). */
+@media (max-width: 420px) {
+  .type-grid { grid-template-columns: 1fr; }
+}
 .type-grid button {
   border: 1px solid var(--line);
   background: var(--card);

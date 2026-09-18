@@ -2273,6 +2273,19 @@ function wireHinweisCarousel() {
   };
   updateIndicators();
 
+  // Council-Review 18.09.2026: .hinweis-carousel ist eine horizontale
+  // Flex-Zeile — ohne explizite Höhe richtet sich die Zeilenhöhe nach dem
+  // HÖCHSTEN aller Slides, nicht nach dem sichtbaren. Bei kurzen Hinweisen
+  // blieb darunter eine Leerfläche stehen, während gleichzeitig ein langer
+  // Termin-Slide (ohne "Mehr anzeigen", also nicht von collapseOthers
+  // erfasst) die Zeile aufblähte. Fix: Höhe explizit auf die aktuell
+  // sichtbare Karte setzen, bei jedem Wechsel und jedem Auf-/Zuklappen neu.
+  const syncCarouselHeight = () => {
+    const current = el.children[hinweisCarouselIndex];
+    if (current) el.style.height = `${current.getBoundingClientRect().height}px`;
+  };
+  syncCarouselHeight();
+
   // Punkte anklickbar (direkt zur jeweiligen Karte) und Pfeile für den
   // Wechsel ohne Wisch-Geste (siehe renderHinweisCarousel, #6).
   dots.forEach((d) => d.addEventListener("click", () => {
@@ -2314,6 +2327,7 @@ function wireHinweisCarousel() {
       ev.stopPropagation();
       const expanded = card.classList.toggle("expanded");
       btn.textContent = expanded ? "Weniger anzeigen" : "Mehr anzeigen";
+      syncCarouselHeight();
     });
     card.appendChild(btn);
   });
@@ -2331,6 +2345,7 @@ function wireHinweisCarousel() {
       const btn = card.querySelector(".hinweis-expand-btn");
       const expanded = card.classList.toggle("expanded");
       if (btn) btn.textContent = expanded ? "Weniger anzeigen" : "Mehr anzeigen";
+      syncCarouselHeight();
     });
   });
 
@@ -2359,6 +2374,7 @@ function wireHinweisCarousel() {
       hinweisCarouselIndex = Math.round(el.scrollLeft / w);
       updateIndicators();
       collapseOthers(el.children[hinweisCarouselIndex]);
+      syncCarouselHeight();
       ticking = false;
     });
   }, { passive: true });
