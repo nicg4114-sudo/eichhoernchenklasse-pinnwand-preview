@@ -40,7 +40,7 @@
 </header>
 
 <main>
-  <div id="offlineBanner" class="offline-banner" hidden>Keine Internetverbindung – zuletzt gespeicherter Stand wird angezeigt.</div>
+  <div id="offlineBanner" class="offline-banner" hidden>Keine Internetverbindung — Neues wird geladen, sobald du wieder online bist.</div>
   <div id="notice" class="notice" hidden></div>
   <section id="feed" class="feed" aria-live="polite"></section>
   <p id="empty" class="empty" hidden></p>
@@ -131,16 +131,18 @@
   </div>
 </dialog>
 
-<!-- Schritt 1: Was möchtest du erstellen? -->
+<!-- Schritt 1: Was möchtest du tun? Design-Review 18.09.2026: nach Absicht
+     statt nach Inhaltstyp benannt, mit Beispielen, häufigstes zuerst — der
+     Typname steht klein dabei, damit er im Editor wiedererkannt wird. -->
 <dialog id="dlgType" class="dlg">
-  <h2>Was möchtest du erstellen?</h2>
+  <h2>Was möchtest du tun?</h2>
   <div class="type-grid">
-    <button data-type="hinweis"><b>Hinweis</b><span>Nachricht mit Text, Bildern & Dateien</span></button>
-    <button data-type="termin"><b>Termin</b><span>Datum, Uhrzeit, Ort</span></button>
-    <button data-type="liste"><b>Liste</b><span>Abhaken oder selbst eintragen</span></button>
-    <button data-type="tabelle"><b>Tabelle</b><span>Eigene Spalten, wie eine Excel-Liste</span></button>
-    <button data-type="umfrage"><b>Umfrage</b><span>Gemeinsam abstimmen</span></button>
-    <button data-type="datei"><b>Datei</b><span>PDF oder Bild, max. 10 MB</span></button>
+    <button data-type="hinweis"><b>Etwas mitteilen</b><span>Info, Elternbrief, Erinnerung — mit Text, Bildern, Dateien</span><small>Hinweis</small></button>
+    <button data-type="termin"><b>Termin ankündigen</b><span>Elternabend, Ausflug, Feier — mit Datum, Uhrzeit, Ort</span><small>Termin</small></button>
+    <button data-type="umfrage"><b>Abstimmen lassen</b><span>Wer kommt? Welcher Tag passt? — Antworten zum Antippen</span><small>Umfrage</small></button>
+    <button data-type="liste"><b>Eintragen lassen</b><span>Kuchenliste, Helfer, Packliste — Plätze zum Eintragen oder Abhaken</span><small>Liste</small></button>
+    <button data-type="tabelle"><b>Mehrere Angaben sammeln</b><span>Fahrgemeinschaft, Kontakte — eigene Spalten wie in Excel</span><small>Tabelle</small></button>
+    <button data-type="datei"><b>Datei oder Foto teilen</b><span>PDF oder Bild, bis 10 MB</span><small>Datei</small></button>
   </div>
   <div class="dlg-actions">
     <button class="btn ghost" data-close>Abbrechen</button>
@@ -200,24 +202,9 @@
   </div>
 </dialog>
 
-<!-- Täglicher Willkommens-Splashscreen (ideen-backlog.md #21) —
-     unabhängig vom ein-/ausklappbaren Begrüßungsblock (#14). -->
-<dialog id="dlgSplash" class="dlg small">
-  <h2 id="splashTitle">Herzlich willkommen</h2>
-  <!-- Nutzerwunsch 18.09.2026 (Alltagstauglichkeits-Review): statt reinem
-       "Happy Talk" (der bisherige Satz sagte nichts Handlungsrelevantes)
-       direkt zeigen, was hier zu finden ist. -->
-  <p>Hier findest du: aktuelle Hinweise und Termine, zum Abstimmen/Eintragen bei Umfragen und Listen, sowie Dateien wie Elternbriefe und Formulare.</p>
-  <label class="field-checkbox">
-    <input type="checkbox" id="splashHideCheckbox">
-    <span>Nicht mehr anzeigen</span>
-  </label>
-  <div class="dlg-actions">
-    <button type="button" class="btn primary" data-close>Los geht's</button>
-  </div>
-</dialog>
-
-<!-- Versionshinweise: erscheint einmalig nach einem Update, oder über den Version-Button -->
+<!-- Versionshinweise: öffnet sich nie von selbst (Design-Review 18.09.2026 —
+     nichts soll vor dem eigentlichen Inhalt stehen), nur über
+     "Mehr" → "Version — was ist neu?". Neues zeigt ein Punkt am Mehr-Knopf. -->
 <dialog id="dlgVersion" class="dlg small">
   <h2>Version</h2>
   <div id="versionList" class="version-list"></div>

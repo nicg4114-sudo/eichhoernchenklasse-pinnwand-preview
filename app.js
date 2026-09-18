@@ -61,9 +61,24 @@ const ICONS = {
 /* ---------- Versionshinweise ---------- */
 
 // Neueste zuerst. Für jedes Update ein Eintrag mit Datum und kurzen,
-// elternfreundlichen Stichpunkten — erscheint einmalig automatisch, wenn
-// sich seit dem letzten Besuch etwas geändert hat (siehe checkForNewVersion).
+// elternfreundlichen Stichpunkten — öffnet sich nicht von selbst, ein
+// Punkt am "Mehr"-Knopf zeigt, dass es Neues gibt (siehe checkForNewVersion).
 const VERSIONS = [
+  {
+    version: "18.09.2026",
+    items: [
+      "Neue Startseite: oben steht, was als Nächstes ansteht und was auf dich wartet, darunter alle Hinweise als Liste zum Aufklappen — kein Durchwischen mehr.",
+      "Neu seit deinem letzten Besuch: neue Einträge haben einen Punkt, die Fußleiste zeigt, in welchem Bereich es Neues gibt.",
+      "Aufgaben haken sich jetzt von selbst ab, sobald du abgestimmt oder dich eingetragen hast. Hinweis-Aufgaben hakst du mit dem Kreis ab, ein zweiter Tipp macht es rückgängig.",
+      "Beteiligung ist aufgeteilt in „Noch offen für dich“ und „Schon mitgemacht“.",
+      "Termine zeigen jetzt Wochentag, Uhrzeit und Ort auf einen Blick. „Zum Kalender hinzufügen“ ist ein einziger Knopf.",
+      "Bei Umfragen mit nur einer Antwort reicht ein Tipp zum Abstimmen.",
+      "Foto-Ordner zeigen die Bilder als Vorschau-Raster, der Kalender markiert Termintage mit Punkten.",
+      "Kein Begrüßungsfenster mehr beim Öffnen.",
+      "Neu im Mehr-Menü: „Große Schrift“ und „Feedback“.",
+      "Listen, Tabellen und Umfragen können auf Wunsch eine feste Platzzahl haben — wer danach dazukommt, steht als „Springer“ bereit.",
+    ],
+  },
   {
     version: "24.08.2026",
     items: [
@@ -129,6 +144,8 @@ let openTerminId;
 // Dasselbe fürs Archiv (siehe renderArchivView) — eigener Zustand, weil
 // beide Ansichten unabhängig voneinander offen/zu sein können.
 let openArchivId;
+// Und für die Hinweis-Liste auf der Startseite (siehe renderHinweisList).
+let openHinweisId;
 
 // Karten-Id aus einem "#karte-<id>"-Link (Push-Klick, Teilen-Link), die
 // erst aufgelöst werden kann, sobald die Karten geladen sind — siehe
@@ -193,9 +210,6 @@ const CREATOR_NAME_KEY = "pinnwand_ersteller_name";
 // hier meist Eltern/Kinder abstimmen, nicht Lehrkraft/Elternsprecher.
 const VOTER_NAME_KEY = "pinnwand_waehler_name";
 const CLASS_ICON = { eichhoernchen: "🐿️", schmetterling: "🦋" };
-// Kurzform für den Begrüßungstext auf dem Dashboard (siehe renderWillkommen)
-// — cls.name allein wäre "Eichhörnchenklasse-Pinnwand", das klingt doppelt.
-const CLASS_GREETING_NAME = { eichhoernchen: "Eichhörnchen-Pinnwand", schmetterling: "Schmetterlings-Pinnwand" };
 
 // Wer eine Aufgabe (siehe is_aufgabe) für sich selbst erledigt hat, merkt
 // das rein geräteseitig — wie die Doppelstimmen-Sperre bei Umfragen. Keine
@@ -213,6 +227,95 @@ function setAufgabeErledigt(id, done) {
   if (done) map[id] = true; else delete map[id];
   localStorage.setItem(AUFGABEN_ERLEDIGT_KEY, JSON.stringify(map));
 }
+
+// Design-Review 18.09.2026: Wer bei einer Liste oder Tabelle mitgemacht hat
+// (eingetragen, abgehakt, Zeile ergänzt), merkt sich das Gerät — Einträge
+// tragen keine Geräte-Kennung, anders als Umfrage-Stimmen (device_token).
+// Grundlage für "Noch offen für dich"/"Schon mitgemacht" und dafür, dass
+// eine als Aufgabe markierte Beteiligung sich mit dem Mitmachen selbst abhakt.
+const MITGEMACHT_KEY = "pinnwand_mitgemacht";
+function loadMitgemacht() {
+  try { return JSON.parse(localStorage.getItem(MITGEMACHT_KEY)) || {}; }
+  catch { return {}; }
+}
+function markMitgemacht(cardId) {
+  if (!cardId) return;
+  const map = loadMitgemacht();
+  map[cardId] = true;
+  localStorage.setItem(MITGEMACHT_KEY, JSON.stringify(map));
+}
+function hatMitgemacht(c) {
+  if (c.type === "umfrage") {
+    return (c.poll_options || []).some((o) => (o.poll_votes || []).some((v) => v.device_token === deviceToken));
+  }
+  return !!loadMitgemacht()[c.id];
+}
+const BETEILIGUNG_TYPES = ["umfrage", "liste", "tabelle"];
+function aufgabeErledigt(c) {
+  return isAufgabeErledigt(c.id) || (BETEILIGUNG_TYPES.includes(c.type) && hatMitgemacht(c));
+}
+// Was auf dieses Gerät wartet: offene Aufgaben plus Umfragen ohne eigene
+// Stimme (Abstimmen ist anders als Eintragen in eine Liste der Normalfall).
+function wartetAufDich(list) {
+  return list.filter((c) => (c.is_aufgabe && !aufgabeErledigt(c)) ||
+    (c.type === "umfrage" && !hatMitgemacht(c)));
+}
+
+// Design-Review 18.09.2026: "Neu seit deinem letzten Besuch", rein
+// geräteseitig wie die Ordner-Markierung. Maßstab (threshold) ist der
+// Zeitpunkt, an dem dieses Gerät zuletzt aktiv war, bevor der jetzige
+// Besuch begann. Ein Besuch endet erst nach mindestens 5 Minuten ohne
+// Aktivität — Neuladen (auch das automatische nach einem App-Update) oder
+// ein kurzer App-Wechsel gehören zum selben Besuch, sonst wären die
+// Neu-Punkte weg, bevor man sie angesehen hat. Beim allerersten Besuch ist
+// nichts "neu" (sonst wäre alles markiert).
+const VISIT_KEY = "pinnwand_besuch";
+const NEW_VISIT_AFTER_MS = 5 * 60 * 1000;
+let newSince = null;
+let seenTabsThisVisit = new Set();
+function loadVisit() {
+  try { return JSON.parse(localStorage.getItem(VISIT_KEY)); }
+  catch { return null; }
+}
+function saveVisit(v) {
+  localStorage.setItem(VISIT_KEY, JSON.stringify(v));
+}
+function rememberVisitEnd() {
+  const v = loadVisit();
+  if (!v) return;
+  v.lastActive = new Date().toISOString();
+  saveVisit(v);
+}
+// true, wenn gerade ein neuer Besuch begonnen hat.
+function beginVisit() {
+  const v = loadVisit();
+  const now = new Date().toISOString();
+  if (v && v.lastActive && Date.now() - new Date(v.lastActive).getTime() < NEW_VISIT_AFTER_MS) {
+    newSince = v.threshold ? new Date(v.threshold) : null;
+    seenTabsThisVisit = new Set(v.seenTabs || []);
+    v.lastActive = now;
+    saveVisit(v);
+    return false;
+  }
+  const threshold = v && v.lastActive ? v.lastActive : null;
+  newSince = threshold ? new Date(threshold) : null;
+  seenTabsThisVisit = new Set();
+  saveVisit({ threshold, lastActive: now, seenTabs: [] });
+  return true;
+}
+function markTabSeen(tab) {
+  if (seenTabsThisVisit.has(tab)) return;
+  seenTabsThisVisit.add(tab);
+  const v = loadVisit();
+  if (!v) return;
+  v.seenTabs = [...seenTabsThisVisit];
+  saveVisit(v);
+}
+function isNew(c) {
+  return !!newSince && !c.trashed_at && new Date(c.created_at) > newSince;
+}
+const NEU_DOT = `<span class="neu-dot" role="img" aria-label="neu"></span>`;
+const NEU_BADGE = `<span class="neu-badge">Neu</span>`;
 
 const pollEditing = new Set();   // Karten-IDs, bei denen gerade Optionen gewählt werden
 let editorState = null;          // { mode: 'create'|'edit', type, card, items }
@@ -267,7 +370,6 @@ const dlgSearch = $("dlgSearch");
 const elSearchBtn = $("searchBtn");
 const elSearchInput = $("searchInput");
 const elSearchResults = $("searchResults");
-const dlgSplash = $("dlgSplash");
 
 /* ---------- Hilfsfunktionen ---------- */
 
@@ -393,6 +495,20 @@ function fmtTimestamp(ts) {
   return `${datum}, ${zeit} Uhr`;
 }
 
+// Design-Review 18.09.2026: Eltern brauchen "wann ungefähr", keine Minute
+// — Admins sehen weiterhin den genauen Zeitpunkt (siehe fmtCreated).
+function fmtRelative(ts) {
+  const d = new Date(ts);
+  const days = Math.round((todayStart() - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  if (days <= 0) return "heute";
+  if (days === 1) return "gestern";
+  if (days < 7) return `vor ${days} Tagen`;
+  return `${d.getDate()}. ${MONTH_SHORT[d.getMonth()]}`;
+}
+function fmtCreated(ts) {
+  return isAdmin() ? `Erstellt am ${fmtTimestamp(ts)}` : fmtRelative(ts);
+}
+
 function fmtTime(t) {
   return t ? `${t.slice(0, 5)} Uhr` : "";
 }
@@ -507,7 +623,7 @@ function toast(msg, isError = false) {
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgSearch, dlgSplash].some((d) => d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgSearch].some((d) => d.open);
 }
 
 /* ---------- API ---------- */
@@ -614,7 +730,10 @@ function renderClassSelect() {
     const cls = classesList.find((c) => c.id === activeClassId);
     elClassSelect.hidden = true;
     if (elClassLockedLabel) {
-      elClassLockedLabel.hidden = false;
+      // Design-Review 18.09.2026: Die Klasse steht schon als Seitentitel da
+      // (updateBrandTitle) — die zweite, gleichlautende Zeile kostete nur
+      // Platz. Sichtbar bleibt sie nur, falls die Klasse nicht auflösbar ist.
+      elClassLockedLabel.hidden = !!cls;
       elClassLockedLabel.textContent = cls
         ? `${CLASS_ICON[cls.slug] || ""} ${cls.name}`
         : "Beide Klassen";
@@ -778,11 +897,16 @@ function renderTermin(c, inTrash) {
   const sub = [fmtTime(c.event_time), c.event_location ? esc(c.event_location) : ""]
     .filter(Boolean).join(" · ");
   const rel = inTrash ? "" : relativeDay(c.event_date);
+  // Design-Review 18.09.2026: ein Knopf mit Auswahl statt zwei gleichrangiger
+  // Knöpfe — man muss nur wissen, welchen Kalender man selbst benutzt.
   const calActions = inTrash ? "" : `
-    <div class="cal-actions">
-      <button class="btn small ghost" data-action="ics-download" data-card="${c.id}">${ICONS.termin}<span>In Kalender speichern</span></button>
-      <a class="btn small link" href="${googleCalUrl(c)}" target="_blank" rel="noopener noreferrer">Google Kalender</a>
-    </div>`;
+    <details class="cal-add">
+      <summary class="btn small ghost">${ICONS.termin}<span>Zum Kalender hinzufügen</span></summary>
+      <div class="cal-add-menu">
+        <button type="button" class="btn small ghost" data-action="ics-download" data-card="${c.id}">Apple-, Outlook- oder Handy-Kalender</button>
+        <a class="btn small ghost" href="${googleCalUrl(c)}" target="_blank" rel="noopener noreferrer">Google Kalender</a>
+      </div>
+    </details>`;
   return `
     <div class="event-row">
       <div class="event-date-box"><b>${d.getDate()}</b><span>${MONTH_SHORT[d.getMonth()]}</span></div>
@@ -1022,14 +1146,37 @@ function renderHinweisAttachments(c) {
 // Kennzeichen + Erledigt-Knopf für eine als Aufgabe markierte Karte
 // (Hinweis/Umfrage/Liste/Tabelle, siehe is_aufgabe) — erscheint überall,
 // wo die Karte gerendert wird, nicht nur im Dashboard.
+// Design-Review 18.09.2026: runder Abhak-Kreis statt Warndreieck plus
+// separatem "Erledigt"-Knopf (ein Dreieck liest sich als Warnung), ein
+// zweiter Tipp nimmt das Abhaken zurück. Bei Umfrage/Liste/Tabelle hakt
+// das Mitmachen selbst die Aufgabe ab (siehe aufgabeErledigt) — dann gibt
+// es nichts mehr zurückzunehmen.
 function aufgabeBlockHtml(c) {
   if (!c.is_aufgabe) return "";
-  const done = isAufgabeErledigt(c.id);
+  const done = aufgabeErledigt(c);
+  const auto = done && !isAufgabeErledigt(c.id);
+  if (auto) {
+    return `
+      <div class="card-aufgabe done">
+        <span class="aufgabe-check is-done" aria-hidden="true">${ICONS.check}</span>
+        <span>Erledigt — du hast mitgemacht</span>
+      </div>`;
+  }
+  // Bei Umfrage/Liste/Tabelle ist das Mitmachen selbst das Abhaken — ein
+  // zusätzlicher Kreis ließe "abhaken ohne abzustimmen" zu und würde die
+  // Frage aufwerfen, was man denn nun tun soll.
+  if (BETEILIGUNG_TYPES.includes(c.type) && !done) {
+    return `
+      <div class="card-aufgabe">
+        <span class="aufgabe-check" aria-hidden="true"></span>
+        <span>Aufgabe — hakt sich ab, sobald du mitmachst</span>
+      </div>`;
+  }
   return `
     <div class="card-aufgabe ${done ? "done" : ""}">
-      ${done ? ICONS.check : ICONS.warning}
-      <span>${done ? "Für dich erledigt" : "Aufgabe"}</span>
-      ${done ? "" : `<button type="button" class="btn small" data-action="aufgabe-done" data-card="${c.id}">Erledigt</button>`}
+      <button type="button" class="aufgabe-check ${done ? "is-done" : ""}" data-action="${done ? "aufgabe-undo" : "aufgabe-done"}"
+              data-card="${c.id}" aria-pressed="${done}" aria-label="${done ? "Abhaken zurücknehmen" : "Als erledigt abhaken"}">${done ? ICONS.check : ""}</button>
+      <span>${done ? "Für dich erledigt" : "Aufgabe — abhaken, wenn erledigt"}</span>
     </div>`;
 }
 
@@ -1084,13 +1231,16 @@ function renderCard(c, opts) {
         { day: "numeric", month: "long", year: "numeric" })} endgültig gelöscht.</p>`
     : "";
 
-  const endNote = (c.end_date && !inTrash)
+  // Design-Review 18.09.2026: Bei Terminen ist end_date nur das interne
+  // Archivdatum (meist der Folgetag) — für Eltern las sich "Endet am" wie
+  // die Dauer des Termins. Bei Umfragen/Listen bleibt es die Frist.
+  const endNote = (c.end_date && !inTrash && (isAdmin() || c.type !== "termin"))
     ? ` · Endet am ${esc(fmtDateLong(c.end_date))}` : "";
   const creatorNote = c.creator_name ? ` · von ${esc(c.creator_name)}` : "";
   // Nur wenn seit dem Anlegen tatsächlich einmal etwas bearbeitet wurde
   // (siehe update_card in migration-013) — keine rückwirkenden Angaben bei
-  // unveränderten Karten.
-  const editedNote = c.updated_at
+  // unveränderten Karten. Seit dem Design-Review nur noch für Admins.
+  const editedNote = c.updated_at && isAdmin()
     ? `<div class="card-meta">Zuletzt geändert: ${fmtTimestamp(c.updated_at)}${c.last_edited_by ? ` · von ${esc(c.last_edited_by)}` : ""}</div>`
     : "";
 
@@ -1098,6 +1248,7 @@ function renderCard(c, opts) {
     <article class="card ${c.pinned && !inTrash ? "pinned" : ""} ${inTrash ? "trashed" : ""} ${opts && opts.nested ? "nested" : ""}" data-card="${c.id}">
       <div class="card-top">
         <span class="type-badge ${c.type}">${TYPE_LABELS[c.type]}</span>
+        ${isNew(c) && !(opts && opts.nested) ? NEU_BADGE : ""}
         ${!inTrash ? endsSoonBadge(c) : ""}
         ${c.pinned && !inTrash ? `<span class="pin-flag">${ICONS.pin}Angepinnt</span>` : ""}
         ${!inTrash ? classChipHtml(c) : ""}
@@ -1113,7 +1264,7 @@ function renderCard(c, opts) {
         ${c.parent_id ? linkedBackChipHtml(c) : ""}
         ${trashNote}
         ${body}
-        <div class="card-meta">Erstellt am ${fmtTimestamp(c.created_at)}${creatorNote}${endNote}</div>
+        <div class="card-meta">${fmtCreated(c.created_at)}${creatorNote}${endNote}</div>
         ${editedNote}
         ${aufgabeBlockHtml(c)}
         ${shareButtonHtml(c)}
@@ -1206,7 +1357,7 @@ function renderKurznachricht(c) {
       </div>
       ${c.body ? `<div class="kurz-bubble-body rich">${sanitizeRich(c.body)}</div>` : ""}
       ${renderHinweisAttachments(c)}
-      <div class="kurz-bubble-meta">${fmtTimestamp(c.created_at)}${creatorNote}</div>
+      <div class="kurz-bubble-meta">${isAdmin() ? fmtTimestamp(c.created_at) : fmtRelative(c.created_at)}${creatorNote}</div>
       ${aufgabeBlockHtml(c)}
     </article>`;
 }
@@ -1214,32 +1365,49 @@ function renderKurznachricht(c) {
 /* ---------- Startseite (Dashboard) ---------- */
 
 // list: alle sichtbaren, nicht archivierten Karten der aktiven Klasse.
+// Design-Review 18.09.2026: Die Startseite beantwortet zuerst "Was steht
+// an, und muss ich etwas tun?" (Als Nächstes), darunter alle Hinweise als
+// senkrechte Liste zum Aufklappen. Vorher füllte ein einzelner Hinweis im
+// Karussell den ersten Bildschirm, die übrigen sah nur, wer wischte, und
+// der nächste Termin lag unterhalb des sichtbaren Bereichs.
 function renderStart(list) {
-  // Bewusst nicht die Fetch-Reihenfolge (pinned zuerst) übernehmen — im
-  // Karussell soll immer der zeitlich neuste Hinweis vorne stehen, auch
-  // wenn ein älterer Hinweis angepinnt ist (die Anpinn-Kennzeichnung
-  // bleibt sichtbar, bestimmt aber nicht mehr die Reihenfolge).
+  // Bewusst nicht die Fetch-Reihenfolge (pinned zuerst) übernehmen — der
+  // zeitlich neuste Hinweis steht oben, auch wenn ein älterer angepinnt ist
+  // (die Anpinn-Kennzeichnung bleibt sichtbar, bestimmt aber nicht die
+  // Reihenfolge, Nutzerwunsch aus der Karussell-Zeit).
   const hinweise = list.filter((c) => c.type === "hinweis")
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const termine = list.filter((c) => c.type === "termin");
+  const neu = hinweise.filter(isNew).length;
 
-  // Nutzerwunsch 07.09.2026: Termin/Aufgaben/Kalender-Kacheln stehen wieder
-  // unter dem Hinweis-Karussell, der Stundenplan-Reiter (statt Begrüßung/
-  // Elternabend) sitzt dazwischen. Der Stundenplan läuft jetzt vollständig
-  // über diesen Reiter — die Kalender-Kachel führt direkt in den Kalender,
-  // ohne Zwischenmenü.
-  return `<p class="dash-section-label">Hier steht alles Aktuelles:</p>`
-    + renderHinweisCarousel(hinweise)
+  return `<h2 class="dash-section-label">Als Nächstes</h2>`
+    + renderNextRow(termine, list)
     + renderStundenplanStrip()
-    + renderTerminAufgabenRow(termine, list);
+    + `<h2 class="dash-section-label">Hinweise${neu ? ` <span class="neu-count">${neu} neu</span>` : ""}</h2>`
+    + renderHinweisList(hinweise);
 }
 
-// Begrüßungsblock ganz oben: Klassenname automatisch aus activeClassId
-// (gleiches Muster wie updateBrandTitle), bei "Beide Klassen" neutral wie
-// der Seitentitel.
-function ortsname() {
-  const cls = classesList.find((c) => c.id === activeClassId);
-  return cls ? (CLASS_GREETING_NAME[cls.slug] || `${cls.name}-Pinnwand`) : "Klassen-Pinnwand";
+function renderHinweisList(hinweise) {
+  if (!hinweise.length) {
+    return `<p class="rubrik-panel-empty">Gerade gibt es keine Hinweise. Neue Mitteilungen der Klasse erscheinen hier.</p>`;
+  }
+  return `<div class="hinweis-list">${hinweise.map(renderHinweisStrip).join("")}</div>`;
+}
+
+// Zugeklappt: Titel, zwei Zeilen Vorschau, wie lange her. Aufgeklappt: die
+// volle Karte bzw. Kurznachricht wie bisher (inkl. Anhängen, Aufgabe, Menü).
+function renderHinweisStrip(c) {
+  const isOpen = c.id === openHinweisId;
+  const preview = stripTags(c.body).slice(0, 180);
+  const sub = [c.pinned ? "Angepinnt" : "", isOpen ? "" : preview].filter(Boolean).join(" · ");
+  return renderAccordionStrip(c, {
+    isOpen,
+    action: "toggle-hinweis-strip",
+    dateLabel: fmtRelative(c.created_at),
+    sub,
+    isNew: isNew(c),
+    body: (x) => (x.is_kurznachricht ? renderKurznachricht(x) : renderCard(x)),
+  });
 }
 
 // Nutzerwunsch 07.09.2026, angepasst 07.09.2026: Begrüßungstext und
@@ -1284,107 +1452,38 @@ async function maybeShowAdminLogin() {
   }
 }
 
-// ideen-backlog.md #21: Täglicher Willkommens-Splashscreen, zusätzlich zum
-// ein-/ausklappbaren Begrüßungsblock (#14) — bewusst getrennte Mechanik:
-// der Splash erscheint höchstens einmal pro Kalendertag und lässt sich
-// dauerhaft abschalten, das Einklappen bleibt unabhängig davon bestehen.
-const SPLASH_LAST_DAY_KEY = "pinnwand_splash_letzter_tag";
-const SPLASH_OFF_KEY = "pinnwand_splash_aus";
-
-function maybeShowSplash() {
-  if (!dlgSplash || localStorage.getItem(SPLASH_OFF_KEY) === "1") return;
-  const today = toISODate(new Date());
-  if (localStorage.getItem(SPLASH_LAST_DAY_KEY) === today) return;
-  localStorage.setItem(SPLASH_LAST_DAY_KEY, today);
-  $("splashTitle").textContent = `Herzlich willkommen auf der ${ortsname()}`;
-  dlgSplash.showModal();
-}
-
-// Wischbares Karussell: eine Hinweis-Karte je Bildschirmbreite, Punkte
-// darunter zeigen Position/Anzahl. Kurznachrichten laufen kompakt (siehe
-// renderKurznachricht), normale Hinweise als volle Karte.
-function renderHinweisCarousel(hinweise) {
-  if (!hinweise.length) {
-    return `<p class="rubrik-panel-empty">Noch keine Hinweise.</p>`;
-  }
-  const slides = hinweise.map((c) =>
-    `<div class="hinweis-slide">${c.is_kurznachricht ? renderKurznachricht(c) : renderCard(c)}</div>`).join("");
-  const multi = hinweise.length > 1;
-  // Punkte sind jetzt klickbar (springen direkt zur jeweiligen Karte,
-  // siehe wireHinweisCarousel) statt nur Anzeige zu sein.
-  const dots = multi
-    ? `<div class="hinweis-dots">${hinweise.map((_, i) =>
-        `<button type="button" class="hinweis-dot ${i === 0 ? "active" : ""}" data-index="${i}" aria-label="Hinweis ${i + 1} von ${hinweise.length}"></button>`).join("")}</div>`
-    : "";
-  // Pfeile fürs Weiterklicken ohne Wisch-Geste (z. B. am Computer ohne
-  // Trackpad) und ein "1/2"-Zähler, damit auf einen Blick klar ist, dass es
-  // mehr als eine Karte gibt (siehe ideen-backlog.md #6). Ab drei Karten
-  // zusätzlich ein Home-Knopf mittig zwischen den Pfeilen, der direkt zur
-  // ersten Karte zurückspringt (ideen-backlog.md #38) — bei nur zwei
-  // Karten wäre er redundant zum "Vorheriger"-Pfeil.
-  const home = hinweise.length > 2
-    ? `<button type="button" class="hinweis-arrow home" data-action="hinweis-home" aria-label="Zum ersten Hinweis">${ICONS.home}</button>` : "";
-  const arrows = multi ? `
-    <button type="button" class="hinweis-arrow prev" data-dir="-1" aria-label="Vorheriger Hinweis">${ICONS.chevron}</button>
-    ${home}
-    <button type="button" class="hinweis-arrow next" data-dir="1" aria-label="Nächster Hinweis">${ICONS.chevron}</button>` : "";
-  const counter = multi ? `<span class="hinweis-counter">1/${hinweise.length}</span>` : "";
-  return `
-    <div class="hinweis-carousel-wrap">
-      <div class="hinweis-carousel" id="hinweisCarousel">${slides}</div>
-      ${arrows}
-      ${counter}
-    </div>
-    ${dots}`;
-}
-
-// Schlanke Kacheln nebeneinander statt gestapelter Vollbreite-Abschnitte —
-// "Was steht an" (ideen-backlog.md #16): Termin, Aufgaben und aktive
-// Umfragen auf einen Blick. Antippen der Termin-Kachel führt zur Termin-
-// Rubrik mit genau diesem Termin aufgeklappt, die Umfragen-Kachel zur
-// Beteiligung-Rubrik. Aufgaben- und Umfragen-Kachel sind bewusst rein
-// informativ (nur die Anzahl), ohne eigenes Aufklappen — erledigt bzw.
-// abgestimmt wird direkt auf der jeweiligen Karte, dort wo man sie beim
-// Durchsehen ohnehin sieht. Die Reihe passt sich der tatsächlichen Anzahl
-// an Kacheln an (1–3), statt leere Plätze stehen zu lassen.
-function renderTerminAufgabenRow(termine, list) {
-  const next = [...termine].sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))[0];
-  const open = list.filter((c) => c.is_aufgabe && !isAufgabeErledigt(c.id));
-  const umfragen = list.filter((c) => c.type === "umfrage");
+// "Als Nächstes" auf der Startseite: der nächste Termin und was auf dieses
+// Gerät wartet (siehe wartetAufDich). Design-Review 18.09.2026: Die frühere
+// Umfragen-Kachel zählte alle Umfragen als "offen", auch die, bei denen man
+// längst abgestimmt hatte — jetzt eine gemeinsame "Wartet auf dich"-Kachel,
+// die nur zählt, was wirklich noch zu tun ist.
+function renderNextRow(termine, list) {
+  const next = [...termine].sort((a, b) => String(a.event_date).localeCompare(String(b.event_date))
+    || String(a.event_time || "").localeCompare(String(b.event_time || "")))[0];
+  const waiting = wartetAufDich(list).length;
 
   let terminTile = "";
   if (next) {
     const d = parseISODate(next.event_date);
+    const when = [relativeDay(next.event_date), fmtTime(next.event_time)].filter(Boolean).join(" · ");
     terminTile = `
       <button class="dash-tile dash-tile-termin" data-action="open-rubrik" data-type="termin" data-card="${next.id}">
-        <span class="dash-tile-termin-label">Nächster Termin:</span>
-        <span class="dash-tile-termin-date">${d.getDate()}. ${MONTH_SHORT[d.getMonth()]}</span>
+        <span class="dash-tile-termin-label">Nächster Termin</span>
+        <span class="dash-tile-termin-date">${WEEKDAY_SHORT[isoWeekday(d)]} ${d.getDate()}. ${MONTH_SHORT[d.getMonth()]}</span>
         <span class="dash-tile-termin-title">${esc(next.title)}</span>
-        ${next.event_time ? `<span class="dash-tile-termin-time">${esc(fmtTime(next.event_time))}</span>` : ""}
+        ${when ? `<span class="dash-tile-termin-time">${esc(when)}</span>` : ""}
       </button>`;
   }
 
-  const aufgabenTile = `
-    <button class="dash-tile dash-tile-aufgaben ${open.length ? "" : "empty"}" data-action="open-rubrik" data-type="aufgaben">
-      <span class="dash-tile-aufgaben-label">Aufgaben</span>
-      <span class="dash-tile-aufgaben-count">${open.length
-        ? (open.length === 1 ? "1 offene Aufgabe" : `${open.length} offene Aufgaben`)
-        : "Keine offenen Aufgaben"}</span>
+  const waitingTile = `
+    <button class="dash-tile dash-tile-aufgaben ${waiting ? "" : "empty"}" data-action="open-rubrik" data-type="aufgaben">
+      <span class="dash-tile-aufgaben-label">Wartet auf dich</span>
+      <span class="dash-tile-aufgaben-count">${waiting
+        ? (waiting === 1 ? "1 Sache zu erledigen" : `${waiting} Sachen zu erledigen`)
+        : "Alles erledigt"}</span>
     </button>`;
 
-  let umfrageTile = "";
-  if (umfragen.length) {
-    umfrageTile = `
-      <button class="dash-tile dash-tile-umfrage" data-action="open-rubrik" data-type="beteiligung">
-        <span class="dash-tile-umfrage-label">Umfragen</span>
-        <span class="dash-tile-umfrage-count">${umfragen.length === 1 ? "1 offene Umfrage" : `${umfragen.length} offene Umfragen`}</span>
-      </button>`;
-  }
-
-  // Nutzerwunsch 11.09.2026: eigene Kalender-Kachel entfällt — ihr Symbol
-  // sitzt jetzt direkt am "Termin"-Knopf in der Fußleiste (Kalender und
-  // Termin sind dieselbe Rubrik, siehe renderKalenderView).
-  const tiles = [terminTile, aufgabenTile, umfrageTile].filter(Boolean);
+  const tiles = [terminTile, waitingTile].filter(Boolean);
   return `<div class="dash-tile-row count-${tiles.length}">${tiles.join("")}</div>`;
 }
 
@@ -1393,30 +1492,38 @@ function renderTerminAufgabenRow(termine, list) {
 // Wiederverwendbarer Akkordeon-Streifen: Kopfzeile mit Titel/Untertitel/
 // Datum, antippen klappt die volle Karte darunter auf. Genutzt von der
 // Termin-Rubrik (renderTerminStrip) und vom Archiv (renderArchivStrip).
-function renderAccordionStrip(c, { isOpen, action, dateLabel, sub }) {
+// isNew: Neu-Punkt vor dem Titel (siehe isNew). body: eigene Darstellung
+// des aufgeklappten Inhalts (Standard: renderCard).
+function renderAccordionStrip(c, { isOpen, action, dateLabel, sub, isNew = false, body = renderCard }) {
   return `
     <div class="acc-strip ${esc(c.type)} ${isOpen ? "open" : ""}">
-      <button class="acc-strip-head" data-action="${action}" data-card="${c.id}">
+      <button class="acc-strip-head" data-action="${action}" data-card="${c.id}" aria-expanded="${isOpen}">
         <span class="acc-strip-title-wrap">
-          <span class="acc-strip-title">${esc(c.title)}</span>
-          <span class="acc-strip-sub">${esc(sub)}</span>
+          <span class="acc-strip-title">${isNew ? NEU_DOT : ""}${esc(c.title)}</span>
+          ${sub ? `<span class="acc-strip-sub">${esc(sub)}</span>` : ""}
         </span>
         <span class="acc-strip-date">
           <span>${esc(dateLabel)}</span>
           ${ICONS.chevron}
         </span>
       </button>
-      ${isOpen ? `<div class="acc-strip-body">${renderCard(c)}</div>` : ""}
+      ${isOpen ? `<div class="acc-strip-body">${body(c)}</div>` : ""}
     </div>`;
 }
 
+// Design-Review 18.09.2026: Unter dem Titel steht jetzt, was Eltern
+// brauchen — wann (relativ) und wo, statt wer den Termin eingetragen hat.
+// Der Wochentag steht direkt am Datum.
 function renderTerminStrip(c) {
   const d = parseISODate(c.event_date);
+  const sub = [relativeDay(c.event_date), fmtTime(c.event_time), c.event_location || ""]
+    .filter(Boolean).join(" · ");
   return renderAccordionStrip(c, {
     isOpen: c.id === openTerminId,
     action: "toggle-termin-strip",
-    dateLabel: `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.`,
-    sub: c.creator_name || "",
+    dateLabel: `${WEEKDAY_SHORT[isoWeekday(d)]} ${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.`,
+    sub,
+    isNew: isNew(c),
   });
 }
 
@@ -1438,33 +1545,55 @@ function renderArchivStrip(c) {
 
 /* ---------- Beteiligung-Rubrik (Umfrage/Liste/Tabelle) ---------- */
 
-function renderBeteiligungView(items) {
-  const head = "";
-  return head + `<div class="group-body">${items.length
-    ? items.map(renderCard).join("")
-    : `<p class="rubrik-panel-empty">Noch keine Beteiligung.</p>`}</div>`;
+const sortByNeu = (a, b) => String(b.created_at).localeCompare(String(a.created_at));
+// Offene Dinge mit Frist zuerst (früheste zuerst), dann die neusten.
+function sortByFrist(a, b) {
+  if (a.end_date && b.end_date) return a.end_date.localeCompare(b.end_date) || sortByNeu(a, b);
+  if (a.end_date) return -1;
+  if (b.end_date) return 1;
+  return sortByNeu(a, b);
 }
 
-/* ---------- Aufgaben-Übersicht (Klick auf die Aufgaben-Kachel) ---------- */
-
-function renderAufgabenView(items) {
-  const head = "";
+// Design-Review 18.09.2026: aufgeteilt in "Noch offen für dich" und "Schon
+// mitgemacht" (siehe hatMitgemacht) — vorher stand alles unsortiert
+// untereinander, und man musste selbst prüfen, wo man schon dabei war.
+function renderBeteiligungView(items) {
   if (!items.length) {
-    return head + `<p class="rubrik-panel-empty">Aktuell keine als Aufgabe markierten Einträge.</p>`;
+    return `<p class="rubrik-panel-empty">Gerade gibt es nichts zum Mitmachen. Neue Umfragen, Listen und Tabellen erscheinen hier.</p>`;
   }
-  const open = items.filter((c) => !isAufgabeErledigt(c.id));
-  const done = items.filter((c) => isAufgabeErledigt(c.id));
-  const sortByNeu = (a, b) => String(b.created_at).localeCompare(String(a.created_at));
-  open.sort(sortByNeu);
-  done.sort(sortByNeu);
+  const offen = items.filter((c) => !hatMitgemacht(c)).sort(sortByFrist);
+  const dabei = items.filter(hatMitgemacht).sort(sortByNeu);
+  let html = `<h2 class="group-label">Noch offen für dich</h2>`;
+  html += offen.length
+    ? `<div class="group-body">${offen.map((c) => renderCard(c)).join("")}</div>`
+    : `<p class="rubrik-panel-empty">Du hast überall mitgemacht — danke!</p>`;
+  if (dabei.length) {
+    html += `
+      <h2 class="group-label group-label-spaced">Schon mitgemacht</h2>
+      <div class="group-body">${dabei.map((c) => renderCard(c)).join("")}</div>`;
+  }
+  return html;
+}
 
-  let body = `<div class="group-body">${open.map((c) => renderCard(c)).join("")}</div>`;
+/* ---------- "Wartet auf dich" (Klick auf die Kachel der Startseite) ---------- */
+
+// Offene Aufgaben und Umfragen ohne eigene Stimme (siehe wartetAufDich),
+// darunter, was davon schon erledigt ist.
+function renderAufgabenView(list) {
+  const open = wartetAufDich(list).sort(sortByFrist);
+  const done = list.filter((c) => (c.is_aufgabe && aufgabeErledigt(c)) ||
+    (c.type === "umfrage" && hatMitgemacht(c))).sort(sortByNeu);
+
+  let body = `<h2 class="group-label">Wartet auf dich</h2>`;
+  body += open.length
+    ? `<div class="group-body">${open.map((c) => renderCard(c)).join("")}</div>`
+    : `<p class="rubrik-panel-empty">Alles erledigt — gerade wartet nichts auf dich.</p>`;
   if (done.length) {
     body += `
-      <h2 class="group-label" style="margin:18px 2px 12px">Für dich schon erledigt</h2>
+      <h2 class="group-label group-label-spaced">Schon erledigt</h2>
       <div class="group-body">${done.map((c) => renderCard(c)).join("")}</div>`;
   }
-  return head + body;
+  return body;
 }
 
 /* ---------- Ordner-Unterseite (Rubrik "Datei") ---------- */
@@ -1612,7 +1741,7 @@ function renderPhotoGridTile(c) {
         <summary title="Aktionen">${ICONS.menu}</summary>
         <div class="menu-list">${menu}</div>
       </details>`}
-      ${c.title ? `<div class="photo-tile-caption">${esc(c.title)}</div>` : ""}
+      ${c.title ? `<div class="photo-tile-caption">${isNew(c) ? NEU_DOT : ""}${esc(c.title)}</div>` : ""}
     </div>`;
 }
 
@@ -2298,12 +2427,38 @@ function renderKalAdminHolidays() {
 }
 
 const EMPTY_TEXT = {
-  feed: "Noch nichts an der Pinnwand. Mit dem +-Knopf unten geht's los.",
   archiv: "Noch nichts im Archiv.",
   papierkorb: "Der Papierkorb ist leer.",
 };
 
-// Views mit eigener Leer-Anzeige (Karussell/Kacheln zeigen ihren
+// Zahl an Termin/Beteiligung/Datei in der Fußleiste: wie viele Einträge
+// dort seit dem letzten Besuch neu sind (siehe isNew). Verschwindet, sobald
+// man den Bereich in diesem Besuch einmal geöffnet hat — die Einträge selbst
+// behalten ihren Neu-Punkt bis zum nächsten Besuch.
+const NAV_BADGE_VIEWS = { termine: "termine", kalender: "termine", beteiligung: "beteiligung", dateien: "dateien" };
+function updateNavBadges() {
+  const all = cards.filter((c) => !c.trashed_at && !isArchived(c) && inActiveClass(c) && isNew(c));
+  const counts = {
+    termine: all.filter((c) => c.type === "termin").length,
+    beteiligung: all.filter((c) => BETEILIGUNG_TYPES.includes(c.type)).length,
+    dateien: all.filter((c) => c.type === "datei").length,
+  };
+  for (const [tab, n] of Object.entries(counts)) {
+    const btn = document.querySelector(`#viewTabs [data-view="${tab}"]`);
+    if (!btn) continue;
+    let badge = btn.querySelector(".bn-badge");
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "bn-badge";
+      btn.appendChild(badge);
+    }
+    badge.textContent = String(n);
+    badge.hidden = !n || seenTabsThisVisit.has(tab);
+    btn.setAttribute("aria-label", badge.hidden ? btn.title : `${btn.title}, ${n} neu`);
+  }
+}
+
+// Views mit eigener Leer-Anzeige (Liste/Kacheln zeigen ihren
 // Leer-Zustand selbst) — der generische Hinweistext ist dort überflüssig.
 const EIGENE_LEER_ANZEIGE = new Set(["feed", "dateien", "termine", "beteiligung", "kalender", "aufgaben", "stundenplan", "feedback"]);
 
@@ -2316,132 +2471,6 @@ function updateScrollTopButton() {
   if (!elScrollTopBtn) return;
   const show = EIGENE_LEER_ANZEIGE.has(view) && window.scrollY > SCROLL_TOP_THRESHOLD;
   elScrollTopBtn.hidden = !show;
-}
-
-// Merkt sich beim Neu-Rendern (z. B. stille 60-Sekunden-Aktualisierung),
-// welche Hinweis-Karte im Karussell gerade zu sehen war, damit es nicht
-// unter den Fingern zu Slide 1 zurückspringt.
-let hinweisCarouselIndex = 0;
-
-function wireHinweisCarousel() {
-  const el = $("hinweisCarousel");
-  if (!el) return;
-  const slideCount = el.children.length;
-  if (hinweisCarouselIndex >= slideCount) hinweisCarouselIndex = 0;
-  el.scrollLeft = hinweisCarouselIndex * el.clientWidth;
-  const dots = elFeed.querySelectorAll(".hinweis-dot");
-  const counter = elFeed.querySelector(".hinweis-counter");
-  const updateIndicators = () => {
-    dots.forEach((d, i) => d.classList.toggle("active", i === hinweisCarouselIndex));
-    if (counter) counter.textContent = `${hinweisCarouselIndex + 1}/${slideCount}`;
-  };
-  updateIndicators();
-
-  // Council-Review 18.09.2026: .hinweis-carousel ist eine horizontale
-  // Flex-Zeile — ohne explizite Höhe richtet sich die Zeilenhöhe nach dem
-  // HÖCHSTEN aller Slides, nicht nach dem sichtbaren. Bei kurzen Hinweisen
-  // blieb darunter eine Leerfläche stehen, während gleichzeitig ein langer
-  // Termin-Slide (ohne "Mehr anzeigen", also nicht von collapseOthers
-  // erfasst) die Zeile aufblähte. Fix: Höhe explizit auf die aktuell
-  // sichtbare Karte setzen, bei jedem Wechsel und jedem Auf-/Zuklappen neu.
-  const syncCarouselHeight = () => {
-    const current = el.children[hinweisCarouselIndex];
-    if (current) el.style.height = `${current.getBoundingClientRect().height}px`;
-  };
-  syncCarouselHeight();
-
-  // Punkte anklickbar (direkt zur jeweiligen Karte) und Pfeile für den
-  // Wechsel ohne Wisch-Geste (siehe renderHinweisCarousel, #6).
-  dots.forEach((d) => d.addEventListener("click", () => {
-    el.scrollTo({ left: Number(d.dataset.index) * el.clientWidth, behavior: "smooth" });
-  }));
-  elFeed.querySelectorAll(".hinweis-arrow[data-dir]").forEach((btn) => btn.addEventListener("click", () => {
-    const target = Math.max(0, Math.min(slideCount - 1, hinweisCarouselIndex + Number(btn.dataset.dir)));
-    el.scrollTo({ left: target * el.clientWidth, behavior: "smooth" });
-  }));
-  elFeed.querySelector("[data-action='hinweis-home']")?.addEventListener("click", () => {
-    el.scrollTo({ left: 0, behavior: "smooth" });
-  });
-
-  // Karten, die trotz fester Höhe (siehe style.css) höher sind als ihr
-  // sichtbarer Ausschnitt, bekommen einen "Mehr anzeigen"-Knopf (#2 aus
-  // ideen-backlog.md) — nur wenn wirklich nötig, damit kurze Hinweise
-  // ohne unnötigen Knopf bleiben.
-  // ideen-backlog.md #43 (Council-Performance-Finding): erst ALLE Karten
-  // messen (nur lesende Zugriffe), dann erst die Buttons einfügen (nur
-  // schreibende Zugriffe) — sonst dirty ein appendChild() das Layout und
-  // erzwingt für jede folgende Karte in derselben Schleife einen erneuten
-  // synchronen Reflow (Layout-Thrashing).
-  const cardsNeedingButton = [];
-  elFeed.querySelectorAll(".hinweis-slide > .card").forEach((card) => {
-    if (card.classList.contains("expanded") || card.querySelector(".hinweis-expand-btn")) return;
-    // Gemessen wird der geklippte Inhalt (.card-clip), nicht mehr die
-    // ganze Karte — das "..."-Menü im card-top hat keine feste Höhe mehr
-    // und darf die Messung nicht verfälschen (siehe #20).
-    const clip = card.querySelector(".card-clip");
-    if (clip.scrollHeight <= clip.clientHeight + 2) return;
-    cardsNeedingButton.push(card);
-  });
-  cardsNeedingButton.forEach((card) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "hinweis-expand-btn";
-    btn.textContent = "Mehr anzeigen";
-    btn.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      const expanded = card.classList.toggle("expanded");
-      btn.textContent = expanded ? "Weniger anzeigen" : "Mehr anzeigen";
-      syncCarouselHeight();
-    });
-    card.appendChild(btn);
-  });
-
-  // Nutzerwunsch 07.09.2026: Nicht mehr nur der "Mehr anzeigen"-Knopf,
-  // sondern ein Tipp/Klick irgendwo auf der Karte klappt den Hinweis auf
-  // (bzw. wieder zu). Klicks auf echte Bedienelemente (Aktionsmenü,
-  // Anhänge, Links, verknüpfte Karten, …) lösen das NICHT aus — die
-  // sollen weiterhin normal funktionieren.
-  elFeed.querySelectorAll(".hinweis-slide > .card").forEach((card) => {
-    if (card.dataset.tapToggleWired) return;
-    card.dataset.tapToggleWired = "1";
-    card.addEventListener("click", (ev) => {
-      if (ev.target.closest("a, button, summary, input, textarea, select, [data-action]")) return;
-      const btn = card.querySelector(".hinweis-expand-btn");
-      const expanded = card.classList.toggle("expanded");
-      if (btn) btn.textContent = expanded ? "Weniger anzeigen" : "Mehr anzeigen";
-      syncCarouselHeight();
-    });
-  });
-
-  // ideen-backlog.md #29: .hinweis-carousel ist ein horizontal scrollender
-  // Flex-Container — overflow-x blendet nur den sichtbaren Ausschnitt aus,
-  // für die Höhe der Flex-Zeile zählen aber alle Karten mit, auch die
-  // weggescrollten. Blieb eine Karte .expanded, bestimmte sie weiterhin
-  // die Containerhöhe, obwohl eine kürzere Karte sichtbar war — Fußleiste
-  // "hing" mit Leerraum darüber. Fix: beim Wechsel der sichtbaren Karte
-  // jede andere, noch aufgeklappte Karte automatisch wieder einklappen.
-  const collapseOthers = (exceptSlide) => {
-    elFeed.querySelectorAll(".hinweis-slide > .card.expanded").forEach((card) => {
-      if (card.closest(".hinweis-slide") === exceptSlide) return;
-      card.classList.remove("expanded");
-      const btn = card.querySelector(".hinweis-expand-btn");
-      if (btn) btn.textContent = "Mehr anzeigen";
-    });
-  };
-
-  let ticking = false;
-  el.addEventListener("scroll", () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(() => {
-      const w = el.clientWidth || 1;
-      hinweisCarouselIndex = Math.round(el.scrollLeft / w);
-      updateIndicators();
-      collapseOthers(el.children[hinweisCarouselIndex]);
-      syncCarouselHeight();
-      ticking = false;
-    });
-  }, { passive: true });
 }
 
 /* ---------- Adressleiste / Verlauf ---------- */
@@ -2594,20 +2623,12 @@ function openCardById(id) {
     openFolderId = c.folder_id || "";
   } else {
     view = "feed";
+    openHinweisId = id;
   }
   render();
   requestAnimationFrame(() => {
-    if (c.type === "hinweis" && view === "feed") {
-      // Muss dieselbe Reihenfolge wie renderStart() nutzen (neuster zuerst,
-      // unabhängig vom Pin-Status, siehe #25/Hinweis-Sortierung) — sonst
-      // landet der Sprung (Push-Klick, Teilen-Link, Suche) auf der falschen
-      // Karussell-Position.
-      const hinweise = visibleCards().filter((x) => x.type === "hinweis")
-        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-      const idx = hinweise.findIndex((x) => x.id === id);
-      if (idx >= 0) { hinweisCarouselIndex = idx; wireHinweisCarousel(); }
-    }
-    const el = elFeed.querySelector(`.card[data-card="${CSS.escape(id)}"]`);
+    const sel = `.card[data-card="${CSS.escape(id)}"], .kurz-bubble[data-card="${CSS.escape(id)}"]`;
+    const el = elFeed.querySelector(sel);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     el.classList.add("flash");
@@ -2633,7 +2654,6 @@ function render() {
 
   if (view === "feed") {
     elFeed.innerHTML = renderStart(list);
-    wireHinweisCarousel();
   } else if (view === "termine" || view === "kalender") {
     elFeed.innerHTML = renderKalenderView(list.filter((c) => c.type === "termin"));
     wireKalender();
@@ -2650,7 +2670,7 @@ function render() {
       : "";
     elFeed.innerHTML = toolbar + list.map(renderCard).join("");
   } else if (view === "aufgaben") {
-    elFeed.innerHTML = renderAufgabenView(list.filter((c) => c.is_aufgabe));
+    elFeed.innerHTML = renderAufgabenView(list);
   } else if (view === "stundenplan") {
     elFeed.innerHTML = renderStundenplanView();
   } else if (view === "feedback") {
@@ -2661,6 +2681,9 @@ function render() {
 
   elEmpty.textContent = EMPTY_TEXT[view] || "";
   elEmpty.hidden = EIGENE_LEER_ANZEIGE.has(view) ? true : list.length > 0;
+
+  if (NAV_BADGE_VIEWS[view]) markTabSeen(NAV_BADGE_VIEWS[view]);
+  updateNavBadges();
 
   // Dezente Übergangsanimation nur bei echter Navigation (ideen-backlog.md
   // #5) — eine unveränderte stille Aktualisierung (60-Sekunden-Timer) soll
@@ -3371,9 +3394,13 @@ function cardById(id) {
   return cards.find((c) => c.id === id);
 }
 
-async function doAction(fn, successMsg) {
+// onSuccess läuft nur nach erfolgreichem Speichern und noch vor dem
+// Neuladen — z. B. um "mitgemacht" zu merken, damit das neue Rendern den
+// Stand schon berücksichtigt.
+async function doAction(fn, successMsg, onSuccess) {
   try {
     await fn();
+    if (onSuccess) onSuccess();
     if (successMsg) toast(successMsg);
     await reload({ silent: true });
   } catch (err) {
@@ -3400,7 +3427,7 @@ async function handleFeedClick(ev) {
   if (!btn) return;
   const action = btn.dataset.action;
   if (!isAdmin() && ADMIN_NUR_HAUPTLINK.has(action)) return;
-  const menu = btn.closest("details.menu");
+  const menu = btn.closest("details.menu, details.cal-add");
   if (menu) menu.removeAttribute("open");
 
   if (action === "retry") return reload();
@@ -3573,6 +3600,12 @@ async function handleFeedClick(ev) {
       render();
       break;
     }
+    case "toggle-hinweis-strip": {
+      const id = btn.dataset.card;
+      openHinweisId = openHinweisId === id ? null : id;
+      render();
+      break;
+    }
     case "open-card": {
       openCardById(btn.dataset.card);
       break;
@@ -3585,8 +3618,9 @@ async function handleFeedClick(ev) {
       openKalenderAdmin("schedule");
       break;
     }
-    case "aufgabe-done": {
-      setAufgabeErledigt(btn.dataset.card, true);
+    case "aufgabe-done":
+    case "aufgabe-undo": {
+      setAufgabeErledigt(btn.dataset.card, action === "aufgabe-done");
       render();
       break;
     }
@@ -3634,7 +3668,9 @@ async function handleFeedClick(ev) {
     case "item-fill": {
       const vals = await promptDlg(`Wer übernimmt „${btn.dataset.text}“?`,
         [{ name: "name", label: "Name", placeholder: "z. B. Anna M.", maxlength: 80 }]);
-      if (vals) await doAction(() => rpc("set_item_filled", { p_item_id: itemId, p_name: vals.name }), "Eingetragen — danke!");
+      const ownCard = btn.closest(".card")?.dataset.card;
+      if (vals) await doAction(() => rpc("set_item_filled", { p_item_id: itemId, p_name: vals.name }),
+        "Eingetragen — danke!", () => markMitgemacht(ownCard));
       break;
     }
     case "item-unfill": {
@@ -3653,12 +3689,14 @@ async function handleFeedClick(ev) {
         { name: "name", label: "Dein Name", placeholder: "z. B. Emma K.", maxlength: 80 },
       ]);
       if (vals) await doAction(() => rpc("add_list_item",
-        { p_card_id: cardId, p_text: vals.text, p_filled_by: vals.name }), "Eingetragen — danke!");
+        { p_card_id: cardId, p_text: vals.text, p_filled_by: vals.name }), "Eingetragen — danke!",
+        () => markMitgemacht(cardId));
       break;
     }
     case "row-add": {
       try {
         await rpc("add_table_row", { p_card_id: cardId });
+        markMitgemacht(cardId);
         await reload({ silent: true });
         requestAnimationFrame(() => {
           const cardEl = elFeed.querySelector(`.card[data-card="${CSS.escape(cardId)}"]`);
@@ -3754,12 +3792,15 @@ async function handleFeedClick(ev) {
 }
 
 async function handleFeedChange(ev) {
+  // Karte, zu der das geänderte Feld gehört — fürs Merken von "mitgemacht".
+  const ownCard = ev.target.closest(".card")?.dataset.card;
   const box = ev.target.closest('input[data-action="item-check"]');
   if (box) {
     const wanted = box.checked;
     box.disabled = true;
     try {
       await rpc("set_item_checked", { p_item_id: box.dataset.item, p_checked: wanted });
+      if (wanted) markMitgemacht(ownCard);
       await reload({ silent: true });
     } catch (err) {
       box.checked = !wanted;
@@ -3774,6 +3815,7 @@ async function handleFeedChange(ev) {
     who.disabled = true;
     try {
       await rpc("set_item_filled", { p_item_id: who.dataset.item, p_name: who.value });
+      if (who.value.trim()) markMitgemacht(ownCard);
       await reload({ silent: true });
     } catch (err) {
       who.disabled = false;
@@ -3792,6 +3834,7 @@ async function handleFeedChange(ev) {
     try {
       await rpc("update_table_cell",
         { p_row_id: cell.dataset.row, p_col: Number(cell.dataset.col), p_value: cell.value });
+      if (cell.value.trim()) markMitgemacht(ownCard);
     } catch (err) {
       toast(err.message, true);
       await reload({ silent: true });
@@ -3823,7 +3866,9 @@ function openVersionDialog() {
 }
 
 // Beim Start prüfen, ob es seit dem letzten Besuch dieses Geräts eine neue
-// Version gibt — falls ja, Punkt am Button und einmalig automatisch öffnen.
+// Version gibt — falls ja, nur ein Punkt am "Mehr"-Knopf. Design-Review
+// 18.09.2026: nicht mehr automatisch öffnen, das legte sich zusammen mit
+// dem (inzwischen entfernten) Willkommensfenster vor den eigentlichen Inhalt.
 function checkForNewVersion() {
   if (!elVersionBtn) return;
   const seen = localStorage.getItem(VERSION_SEEN_KEY);
@@ -3838,7 +3883,6 @@ function checkForNewVersion() {
   // #17) und ist ohne den Punkt hier auf dem sichtbaren "Mehr"-Knopf
   // selbst nicht mehr erkennbar, dass es was Neues gibt.
   elMoreBtn?.classList.add("has-update");
-  openVersionDialog();
 }
 
 /* ---------- Push-Benachrichtigungen ---------- */
@@ -4143,16 +4187,6 @@ async function init() {
     });
   }
 
-  // ideen-backlog.md #21: Splashscreen
-  if (dlgSplash) {
-    dlgSplash.addEventListener("click", (ev) => {
-      if (ev.target.closest("[data-close]")) {
-        if ($("splashHideCheckbox").checked) localStorage.setItem(SPLASH_OFF_KEY, "1");
-        dlgSplash.close();
-      }
-    });
-  }
-
   // ideen-backlog.md #24: Suche
   if (elSearchBtn && dlgSearch) {
     elSearchBtn.addEventListener("click", () => {
@@ -4190,21 +4224,28 @@ async function init() {
   // diesem Zeitpunkt mit dem alten classLocked-Wert berechnet, deshalb
   // hier neu bestimmen, bevor irgendetwas admin-Abhängiges gerendert wird.
   adminCode = classLocked ? "" : (localStorage.getItem(ADMIN_CODE_KEY) || "");
-  await maybeShowAdminLogin();
-  maybeShowSplash();
+  // Design-Review 18.09.2026: keine automatische Passwortabfrage mehr beim
+  // Öffnen — nichts soll vor dem Inhalt stehen. Lehrkraft/Elternsprecher
+  // melden sich einmal pro Gerät über "Mehr" → "Admin-Zugang freischalten"
+  // an (maybeShowAdminLogin, weiterhin von dort aufgerufen).
+  beginVisit();
   reload();
 
   // Alle 60 s still aktualisieren (nur wenn sichtbar und kein Dialog offen)
   setInterval(() => {
-    if (document.visibilityState === "visible" && !anyDialogOpen() && pollEditing.size === 0) {
-      reload({ silent: true });
-    }
+    if (document.visibilityState !== "visible") return;
+    rememberVisitEnd();
+    if (!anyDialogOpen() && pollEditing.size === 0) reload({ silent: true });
   }, 60000);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && loaded && !anyDialogOpen()) {
-      reload({ silent: true });
+    if (document.visibilityState === "hidden") {
+      rememberVisitEnd();
+      return;
     }
+    if (beginVisit() && loaded) render();
+    if (loaded && !anyDialogOpen()) reload({ silent: true });
   });
+  window.addEventListener("pagehide", rememberVisitEnd);
 }
 
 init();

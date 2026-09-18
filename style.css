@@ -193,7 +193,10 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
 /* Über einen Klassen-Link geöffnet: fest auf eine Klasse gesperrt (siehe
    applyClassLink in app.js) — bewusst weiterhin gut lesbar statt komplett
    ausgegraut, nur ohne Dropdown-Pfeil-Cursor. */
-.class-locked-label {
+/* :not([hidden]) — sonst schlägt dieses display das hidden-Attribut, und
+   das (leere) Etikett blieb am Hauptlink als leere Pille neben der
+   Klassenauswahl stehen (gefunden im Design-Review 18.09.2026). */
+.class-locked-label:not([hidden]) {
   display: inline-flex;
   align-items: center;
   cursor: default;
@@ -287,17 +290,6 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
 .search-result:hover { background: var(--bg); }
 .search-result-title { font-weight: 600; }
 .search-result-snippet { font-size: .82rem; color: var(--muted); }
-
-/* ideen-backlog.md #21: Checkbox-Zeile im Splashscreen. */
-.field-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 10px 0 4px;
-  font-size: .9rem;
-  cursor: pointer;
-}
-.field-checkbox input { width: 17px; height: 17px; }
 
 /* "Mehr"-Tab in der Fußleiste — Punkt oben rechts am Icon, sobald es eine
    ungesehene Versions-Neuerung gibt (siehe checkForNewVersion in app.js).
@@ -526,237 +518,17 @@ main {
   margin: var(--dash-gap) 2px calc(var(--dash-gap) / 2);
 }
 .dash-section-label:first-child { margin-top: 0; }
+/* Überschrift gehört zu dem, was darunter steht: den 18px-Abstand von
+   .feed hier fast aufheben, damit sie nicht gleich weit vom eigenen Inhalt
+   wie vom vorherigen Abschnitt entfernt steht (Design-Review 18.09.2026). */
+.feed > .dash-section-label { margin-bottom: -10px; }
+.feed > .dash-section-label + .dash-tile-row { margin-top: 0; }
 .dash-section-label.warn { color: var(--important); }
 .dash-section-label svg { width: 13px; height: 13px; }
 
-/* Hinweis-Karussell: eine Karte je Bildschirmbreite, per Scroll-Snap
-   wischbar, Punkte/Pfeile/Zähler darunter bzw. daneben zeigen Position und
-   erlauben den Wechsel auch ohne Wisch-Geste (#6 aus ideen-backlog.md).
-   Bewusst als angepinnter Zettel gestaltet (Papierton, gestrichelter
-   Rand, kleine Pinnnadel oben) — deutlich abgesetzt von den weißen Karten
-   darunter (Termin/Aufgaben), damit auf einen Blick klar ist: das hier
-   ist der eine dauerhafte Aushang, der Rest ist der normale Feed. */
-/* margin-top (ideen-backlog.md #16): die Pfeile ragen per translateY(-50%)
-   zur Hälfte über die obere Kante hinaus (siehe .hinweis-arrow) — ohne
-   eigenen Abstand nach oben lag das direkt am oberen Seitenrand bzw. an
-   dem, was darüber steht. */
-.hinweis-carousel-wrap { position: relative; margin-top: var(--dash-gap); }
-.hinweis-carousel {
-  display: flex;
-  /* Standard wäre align-items:stretch — würde alle Slides auf die Höhe
-     der größten strecken. Da immer nur eine Slide sichtbar ist (100%
-     Breite, Scroll-Snap), macht das nichts sichtbar anders, verhindert
-     aber, dass eine aufgeklappte Karte (siehe .expanded) von der
-     Stretch-Höhe der übrigen, eingeklappten Karten begrenzt bleibt. */
-  align-items: flex-start;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  gap: 0;
-  scrollbar-width: none;
-  border-radius: var(--radius);
-  /* Council-Review 18.09.2026: Höhe wird jetzt per JS auf die sichtbare
-     Karte gesetzt (syncCarouselHeight in wireHinweisCarousel) statt sich
-     aus der höchsten aller Karten zu ergeben — die Übergangsanimation
-     macht den Sprung beim Wischen/Wechseln weniger abrupt. */
-  transition: height .2s ease;
-}
-.hinweis-carousel::-webkit-scrollbar { display: none; }
-.hinweis-slide {
-  flex: 0 0 100%;
-  scroll-snap-align: start;
-  min-width: 0;
-}
-.hinweis-slide > .card, .hinweis-slide > .kurz-bubble {
-  margin: 0;
-  height: 100%;
-  position: relative;
-  background: #f3e4c8;
-  border-radius: var(--radius-sm);
-  box-shadow: 0 4px 10px -4px rgba(38, 28, 12, .18);
-}
-/* Eigener, fließender Innenabstand statt der geerbten .card-Fixwerte
-   (16/18/14px) — schrumpft auf niedrigen Bildschirmen mit, Maximalwert
-   entspricht den bisherigen festen Werten. Nur die volle Hinweis-Karte,
-   nicht .kurz-bubble — die soll kompakt bleiben wie überall sonst. */
-.hinweis-slide > .card {
-  padding: calc(var(--dash-scale) * 16px) calc(var(--dash-scale) * 18px) calc(var(--dash-scale) * 14px);
-}
-/* Feste Höchsthöhe, damit ein langer Hinweistext nicht die ganze Kachel-
-   Reihe verschiebt (#2 aus ideen-backlog.md) — überlaufender Text blendet
-   nach unten aus, "Mehr anzeigen" (siehe wireHinweisCarousel) klappt bei
-   Bedarf auf volle Höhe auf.
-   Wichtig (ideen-backlog.md #20): NUR der Inhalt (.card-clip) wird
-   geklippt, nicht die ganze .card — sonst landet das "..."-Aktionsmenü
-   (im .card-top, außerhalb von .card-clip) in einem overflow:hidden-
-   Container und dessen Dropdown wird beim Öffnen unsichtbar abgeschnitten.
-   Für Admins sah es dadurch so aus, als gäbe es bei Hinweisen keine
-   Bearbeiten-Option mehr — die Karten außerhalb des Karussells (andere
-   Rubriken) waren nie betroffen, da nur hier geklippt wird. */
-.hinweis-slide > .card .card-clip {
-  max-height: 220px;
-  overflow: hidden;
-  transition: max-height .25s ease;
-  position: relative;
-}
-.hinweis-slide > .card.expanded .card-clip { max-height: 2000px; }
-.hinweis-slide > .card::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 34px;
-  background: linear-gradient(to bottom, rgba(243, 228, 200, 0), #f3e4c8 80%);
-  pointer-events: none;
-}
-.hinweis-slide > .card.expanded::after { display: none; }
-/* Absolut positioniert und über den Fade gelegt (::after oben) — als
-   normales Flusskind würde der Knopf hinter dem überlaufenden Text landen
-   und von overflow:hidden mit verschluckt, solange die Karte eingeklappt
-   ist. */
-.hinweis-expand-btn {
-  position: absolute;
-  left: 34px;
-  right: 34px;
-  bottom: 2px;
-  z-index: 1;
-  border: none;
-  background: none;
-  color: var(--accent-dk);
-  font-weight: 700;
-  font-size: .78rem;
-  text-align: center;
-  cursor: pointer;
-  padding: 4px;
-}
-.hinweis-slide > .card.expanded .hinweis-expand-btn { position: static; margin-top: 6px; }
-/* Nutzerwunsch 07.09.2026: Tipp/Klick irgendwo auf der Karte klappt auf/zu
-   (siehe wireHinweisCarousel) — Zeigefinger nur, solange es wirklich
-   etwas zum Aufklappen gibt. */
-.hinweis-slide > .card:has(.hinweis-expand-btn) { cursor: pointer; }
-/* Die Ersteller-/Zeitzeile wird hier schnell zwei- bis dreizeilig und
-   frisst unnötig Höhe — im Karussell auf eine Zeile mit "…" kürzen statt
-   ganz zu verstecken (voller Text bleibt sichtbar, sobald die Karte
-   nicht mehr im schmalen Karussell, sondern z. B. nach dem Bearbeiten
-   normal angezeigt wird). */
-.hinweis-slide > .card .card-meta {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Höhere Selektor-Genauigkeit nötig, um die Typ-Farbakzent-Regel weiter
-   unten (.card:has(.type-badge.hinweis), Zeile ~617) zu überstimmen —
-   sonst bleibt der linke Rand in der dortigen Akzentfarbe hängen. */
-#feed .hinweis-slide > .card:has(.type-badge.hinweis),
-.hinweis-slide > .kurz-bubble {
-  border: 1.5px dashed var(--accent);
-}
-.hinweis-slide > .card::before, .hinweis-slide > .kurz-bubble::before {
-  content: "";
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--accent-dk);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
-}
-/* Sichtbarer "1/2"-Zähler statt nur der kleinen Punkte, plus Pfeile für
-   den Wechsel per Klick (Desktop ohne Trackpad). */
-.hinweis-counter {
-  position: absolute;
-  /* Council-Review 18.09.2026: bei vergrößerten 44px-Pfeilen (siehe
-     .hinweis-arrow) reicht "top: 10px" nicht mehr aus, um den Zähler
-     unterhalb des rechten Pfeils zu halten — beide sitzen bei right:10px
-     in derselben Spalte. */
-  top: 30px;
-  right: 10px;
-  background: rgba(38, 28, 12, .55);
-  color: #fff;
-  font-size: .68rem;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 999px;
-  pointer-events: none;
-}
-/* ideen-backlog.md #18: "top: 50%" bezog sich auf die ganze
-   .hinweis-carousel-wrap, die mit einer aufgeklappten (.expanded) Karte
-   mitwächst — die Pfeile rutschten dadurch in die Mitte des langen Texts
-   statt am Kartenrand zu bleiben. Ein fester Abstand von oben lag aber
-   selbst bei kurzen Titeln noch mitten im Text. Jetzt sitzen die Pfeile
-   direkt auf dem oberen Kartenrand (halb innen, halb außen) — dort ist
-   nie Fließtext, unabhängig von Titel-/Textlänge.
-   Pfeile sind Geschwister von .hinweis-carousel (siehe
-   renderHinweisCarousel), "top: 0" bezieht sich also auf die obere Kante
-   der Karten. */
-.hinweis-arrow {
-  position: absolute;
-  top: 0;
-  transform: translateY(-50%);
-  /* Council-Review 18.09.2026: von 30px auf 44px (Touch-Mindestgröße) —
-     bleibt zentriert auf der Kartenoberkante (top:0 + translateY(-50%)),
-     wächst also symmetrisch nach oben/unten, nie über den Fließtext
-     (siehe Begründung oben zu #18). */
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, .85);
-  color: var(--ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow);
-  z-index: 2;
-}
-.hinweis-arrow svg { width: 18px; height: 18px; }
-.hinweis-arrow.prev { left: 6px; }
-.hinweis-arrow.prev svg { transform: scaleX(-1); }
-.hinweis-arrow.next { right: 6px; }
-/* Home-Knopf (ideen-backlog.md #38): mittig zwischen den Pfeilen, springt
-   zur ersten Hinweis-Karte zurück — nur ab drei Karten gerendert. Ebenfalls
-   auf 44px vergrößert (Council-Review 18.09.2026). */
-.hinweis-arrow.home { left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; }
-.hinweis-arrow.home svg { width: 16px; height: 16px; }
-.hinweis-dots {
-  display: flex;
-  justify-content: center;
-  gap: 5px;
-  margin: 8px 0 4px;
-}
-/* Klickfläche größer als die sichtbare Punktgröße (Touch-Ziel), sichtbarer
-   Punkt sitzt als kleines ::before mittig darin. */
-.hinweis-dot {
-  position: relative;
-  width: 20px;
-  height: 20px;
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-}
-.hinweis-dot::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--line-strong);
-}
-.hinweis-dot.active::before { background: var(--accent); }
-
-/* Schlanke Kacheln nebeneinander: Nächster Termin, Aufgaben und aktive
-   Umfragen (nur Anzahl, erledigt/abgestimmt wird direkt auf der
-   jeweiligen Karte markiert, siehe card-aufgabe weiter unten) — "Was
-   steht an", siehe renderTerminAufgabenRow. Spart deutlich Höhe gegenüber
-   gestapelten Vollbreite-Abschnitten. Anzahl Spalten richtet sich nach
-   der tatsächlichen Kachel-Zahl (.count-1/2/3), statt leere Plätze zu
+/* "Als Nächstes" auf der Startseite: Nächster Termin und "Wartet auf dich"
+   nebeneinander (siehe renderNextRow). Anzahl Spalten richtet sich nach
+   der tatsächlichen Kachel-Zahl (.count-1/2), statt leere Plätze zu
    zeigen. */
 .dash-tile-row {
   display: grid;
@@ -820,42 +592,48 @@ main {
 .dash-tile-aufgaben.empty .dash-tile-aufgaben-label { color: var(--muted); }
 .dash-tile-aufgaben-count { font-size: .84rem; font-weight: 700; color: var(--ink); }
 
-.dash-tile-umfrage {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  border: none;
-  background: var(--c-beteiligung);
-  color: #fff;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-}
-.dash-tile-umfrage-label {
-  font-size: .68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .03em;
-  opacity: .85;
-}
-.dash-tile-umfrage-count { font-size: .84rem; font-weight: 700; }
-
-/* Kleines "Aufgabe"-Kennzeichen auf einer normalen Karte, siehe renderCard. */
+/* "Aufgabe"-Zeile auf einer Karte, siehe aufgabeBlockHtml. Design-Review
+   18.09.2026: runder Abhak-Kreis (wie in Aufgaben-Apps üblich) statt
+   Warndreieck plus "Erledigt"-Knopf. Der Kreis selbst ist 26px, die
+   Tippfläche per Innenabstand 44px. */
 .card-aufgabe {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-top: 8px;
-  padding-top: 8px;
+  padding-top: 4px;
   border-top: 1px dashed var(--line);
   font-size: .82rem;
   font-weight: 600;
   color: var(--important);
 }
-.card-aufgabe svg { width: 14px; height: 14px; flex: 0 0 auto; }
 .card-aufgabe.done { color: var(--ok); }
-.card-aufgabe .btn { margin-left: auto; }
+.aufgabe-check {
+  flex: 0 0 auto;
+  box-sizing: content-box;
+  width: 26px;
+  height: 26px;
+  padding: 9px;
+  margin: 0 -9px 0 -9px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+.aufgabe-check::before {
+  content: "";
+  grid-area: 1 / 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--important);
+  background: var(--card);
+}
+.aufgabe-check.is-done::before { border-color: var(--ok); background: var(--ok); }
+.aufgabe-check svg { grid-area: 1 / 1; position: relative; width: 14px; height: 14px; }
+span.aufgabe-check { cursor: default; }
 
 /* ---------- Termin-Rubrik: Akkordeon-Streifen mit Zeitstrahl ---------- */
 
@@ -907,7 +685,65 @@ main {
 .acc-strip-date svg { width: 13px; height: 13px; transition: transform .15s ease; }
 .acc-strip.open .acc-strip-date svg { transform: rotate(90deg); }
 .acc-strip-body { padding: 0 10px 10px; }
-.acc-strip-body > .card { margin: 0; border: none; padding: 0; box-shadow: none; }
+.acc-strip-body > .card,
+.acc-strip-body > .kurz-bubble { margin: 0; border: none; padding: 0; box-shadow: none; background: none; }
+/* Der Titel steht schon im Streifen darüber — aufgeklappt nicht nochmal
+   (Design-Review 18.09.2026, galt vorher auch schon für Termine/Archiv). */
+.acc-strip-body > .card > .card-clip > h3,
+.acc-strip-body > .kurz-bubble > .kurz-bubble-head > b { display: none; }
+
+/* Hinweis-Liste auf der Startseite (Design-Review 18.09.2026, ersetzt das
+   Karussell): zugeklappt Titel + zwei Zeilen Vorschau, siehe
+   renderHinweisStrip. */
+.hinweis-list { display: flex; flex-direction: column; gap: 8px; }
+.acc-strip.hinweis .acc-strip-sub {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: .82rem;
+  line-height: 1.35;
+  margin-top: 3px;
+}
+.acc-strip.hinweis .acc-strip-head { align-items: flex-start; }
+.acc-strip.hinweis .acc-strip-date { padding-top: 1px; }
+
+/* Neu seit dem letzten Besuch (siehe isNew in app.js). Punkt vor Titeln,
+   "Neu"-Etikett auf vollen Karten, Zahl neben Überschriften. */
+.neu-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 6px;
+  vertical-align: .1em;
+  flex: 0 0 auto;
+}
+.neu-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+}
+.neu-count {
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--accent-dk);
+}
+.group-label-spaced { margin-top: 22px; }
 
 /* ---------- Hinweis-Rubrik: Kurznachrichten-Feed ---------- */
 
@@ -1221,19 +1057,27 @@ main {
   margin-right: 6px;
 }
 
-.cal-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px 14px;
-  flex-wrap: wrap;
-  margin: -2px 0 10px;
-}
-.cal-actions .btn {
+/* "Zum Kalender hinzufügen" mit Auswahl (Design-Review 18.09.2026) —
+   natives <details>, klappt die zwei Ziele darunter auf. */
+.cal-add { margin: -2px 0 10px; }
+.cal-add > summary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  list-style: none;
+  cursor: pointer;
 }
-.cal-actions svg { width: 15px; height: 15px; display: block; }
+.cal-add > summary::-webkit-details-marker { display: none; }
+.cal-add svg { width: 15px; height: 15px; display: block; }
+.cal-add-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid var(--line);
+}
 
 /* Kalender-Ansicht (ideen-backlog.md #11) */
 /* ideen-backlog.md #22: Verwaltungspunkte als Kacheln direkt unter dem
@@ -1928,6 +1772,24 @@ main {
 }
 .bn-btn svg { width: 25px; height: 25px; }
 .bn-label { font-size: .74rem; font-weight: 650; }
+/* Zahl neuer Einträge seit dem letzten Besuch (siehe updateNavBadges) —
+   :not([hidden]), damit das hidden-Attribut greift. */
+.bn-badge:not([hidden]) {
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 6px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  border: 2px solid var(--card);
+  font-size: .66rem;
+  font-weight: 800;
+  line-height: 14px;
+  text-align: center;
+}
 .bn-btn:hover { color: var(--ink); }
 .bn-btn.active { color: var(--accent); }
 
@@ -2060,6 +1922,17 @@ main {
 .type-grid button:hover { border-color: var(--accent); background: var(--accent-bg); transform: translateY(-1px); }
 .type-grid b { display: block; margin-bottom: 2px; }
 .type-grid span { font-size: .82rem; color: var(--muted); }
+/* Typname klein unter der Absicht (Design-Review 18.09.2026), damit er im
+   Editor ("Neu: Liste") wiedererkannt wird. */
+.type-grid small {
+  display: block;
+  margin-top: 6px;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--accent-dk);
+}
 
 /* "Mehr"-Menü (#dlgMore, ideen-backlog.md #17): Archiv/Papierkorb/Version.
    Bug gefunden 12.09.2026: ".more-item { display: flex }" hat dieselbe
