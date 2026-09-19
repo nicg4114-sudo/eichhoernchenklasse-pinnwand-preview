@@ -1,0 +1,38 @@
+{
+  "name": "Schmetterlingsklasse — Pinnwand",
+  "short_name": "Schmetterling",
+  "description": "Klassenpinnwand für Hinweise, Termine, Listen, Tabellen und Umfragen.",
+  "start_url": "./index.html?klasse=schmetterling",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f3ee",
+  "theme_color": "#4d80ad",
+  "lang": "de",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "./?klasse=schmetterling"
+}

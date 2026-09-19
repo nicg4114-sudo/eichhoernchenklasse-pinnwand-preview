@@ -56,6 +56,9 @@ const ICONS = {
   check: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4.5,10.5 8,14 15.5,6"/></svg>`,
   home: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 9.2L10 3.5l6.8 5.7"/><path d="M4.8 8v7.5a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1V8"/></svg>`,
   kalender: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4.2" width="14" height="12" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="6.5" y1="2.5" x2="6.5" y2="5.5"/><line x1="13.5" y1="2.5" x2="13.5" y2="5.5"/><circle cx="7.3" cy="11.3" r=".9" fill="currentColor" stroke="none"/></svg>`,
+  // Wie das "Teilen"-Symbol in Safari auf dem iPhone (Installations-Hinweis).
+  iosShare: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7H5.5a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1H13"/><line x1="10" y1="2.5" x2="10" y2="12"/><polyline points="6.8,5.6 10,2.5 13.2,5.6"/></svg>`,
+  install: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="2.5" width="9" height="15" rx="1.8"/><line x1="10" y1="6.5" x2="10" y2="12.5"/><polyline points="7.6,10.2 10,12.6 12.4,10.2"/></svg>`,
 };
 
 /* ---------- Versionshinweise ---------- */
@@ -64,6 +67,15 @@ const ICONS = {
 // elternfreundlichen Stichpunkten — öffnet sich nicht von selbst, ein
 // Punkt am "Mehr"-Knopf zeigt, dass es Neues gibt (siehe checkForNewVersion).
 const VERSIONS = [
+  {
+    version: "19.09.2026",
+    items: [
+      "Alle Termine automatisch im eigenen Kalender: unter dem Monatskalender einmal abonnieren, neue und geänderte Termine kommen dann von selbst.",
+      "Tipp auf der Startseite, wie du die Pinnwand als App speicherst — lässt sich wegklicken.",
+      "Ältere Hinweise sind eingeklappt, damit das Aktuelle oben bleibt.",
+      "„Sprache · Language“ im Mehr-Menü erklärt, wie der Browser die Pinnwand übersetzt.",
+    ],
+  },
   {
     version: "18.09.2026",
     items: [
@@ -354,6 +366,7 @@ const dlgEditor = $("dlgEditor");
 const dlgConfirm = $("dlgConfirm");
 const dlgPrompt = $("dlgPrompt");
 const dlgVersion = $("dlgVersion");
+const dlgTranslate = $("dlgTranslate");
 const elVersionBtn = $("moreVersionBtn");
 const dlgMore = $("dlgMore");
 const elMoreBtn = $("moreBtn");
@@ -613,17 +626,18 @@ let toastTimer = null;
 // ideen-backlog.md #43 (Council-Finding): einheitlicher Fallback zentral
 // hier statt an jeder Aufrufstelle einzeln — sonst zeigt ein Fehler ohne
 // .message (z. B. ein TypeError) buchstäblich "undefined" im Toast.
-function toast(msg, isError = false) {
+// ms: Anzeigedauer, falls längere Erklärungen mehr Lesezeit brauchen.
+function toast(msg, isError = false, ms = 0) {
   const el = $("toast");
   el.textContent = msg || (isError ? "Etwas ist schiefgelaufen." : "");
   el.classList.toggle("error", isError);
   el.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, isError ? 6000 : 3000);
+  toastTimer = setTimeout(() => { el.hidden = true; }, ms || (isError ? 6000 : 3000));
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgSearch].some((d) => d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgSearch, dlgTranslate].some((d) => d && d.open);
 }
 
 /* ---------- API ---------- */
@@ -694,15 +708,26 @@ async function loadClasses() {
   renderClassSelect();
 }
 
-// Klassen-Link auswerten: "?klasse=<slug>" setzt einmalig die passende
-// Klasse fest und sperrt sie dauerhaft für dieses Gerät (siehe Kommentar
-// bei CLASS_LOCK_KEY oben). Der Parameter wird danach aus der Adresszeile
-// entfernt, die Sperre bleibt trotzdem bestehen (per localStorage).
+// Klassen-Link auswerten: "?klasse=<slug>" setzt die passende Klasse fest
+// und sperrt sie für dieses Gerät (siehe Kommentar bei CLASS_LOCK_KEY oben).
+//
+// UX-Forschung 19.09.2026: Der Parameter bleibt jetzt in der Adresszeile
+// (siehe syncClassInUrl), statt entfernt zu werden. Grund: Safari auf dem
+// iPhone löscht den Gerätespeicher einer Seite, wenn man sie eine Weile
+// nicht öffnet, und eine installierte Web-App hat dort einen eigenen
+// Speicher. Mit der Klasse in Lesezeichen/App-Symbol stellt sie sich dann
+// von selbst wieder her, statt auf "Beide Klassen" zu fallen.
 function applyClassLink() {
   const slug = new URLSearchParams(location.search).get("klasse");
   if (slug) {
     const cls = classesList.find((c) => c.slug === slug);
-    if (cls) {
+    // Ein geteilter Karten-Link ("#karte-…") trägt die Klasse des Geräts, das
+    // ihn geteilt hat. Er darf eine hier schon festgelegte ANDERE Klasse
+    // nicht umstellen — sonst landete z. B. ein Schmetterlings-Elternteil
+    // nach einem weitergeleiteten Link dauerhaft in der Eichhörnchenklasse.
+    const lockedSlug = classLocked ? localStorage.getItem(CLASS_SLUG_KEY) : null;
+    const fremderTeilenLink = location.hash.startsWith("#karte-") && lockedSlug && lockedSlug !== slug;
+    if (cls && !fremderTeilenLink) {
       activeClassId = cls.id;
       classLocked = true;
       localStorage.setItem(CLASS_KEY, activeClassId);
@@ -710,9 +735,27 @@ function applyClassLink() {
       localStorage.setItem(CLASS_SLUG_KEY, slug);
       applyClassTheme(slug);
     }
-    history.replaceState(null, "", location.pathname + location.hash);
   }
+  syncClassInUrl();
 }
+
+// Hält "?klasse=<slug>" in der Adresse passend zur festgelegten Klasse (oder
+// entfernt ihn am Hauptlink) und wählt das passende App-Manifest, damit ein
+// installiertes App-Symbol mit der richtigen Klasse startet.
+function syncClassInUrl() {
+  const slug = classLocked ? localStorage.getItem(CLASS_SLUG_KEY) : null;
+  const params = new URLSearchParams(location.search);
+  if (slug) params.set("klasse", slug); else params.delete("klasse");
+  const qs = params.toString();
+  const url = location.pathname + (qs ? `?${qs}` : "") + location.hash;
+  if (url !== location.pathname + location.search + location.hash) {
+    history.replaceState(history.state, "", url);
+  }
+  const link = document.querySelector('link[rel="manifest"]');
+  const href = KLASSEN_MANIFESTE.has(slug) ? `manifest-${slug}.webmanifest` : "manifest.webmanifest";
+  if (link && link.getAttribute("href") !== href) link.setAttribute("href", href);
+}
+const KLASSEN_MANIFESTE = new Set(["eichhoernchen", "schmetterling"]);
 
 // Kachel-/Kartenfilter je nach gewählter Klasse: eigene Klasse + "Gemeinsam"
 // (class_id null) sind sichtbar, die jeweils andere Klasse wird ausgeblendet.
@@ -1201,8 +1244,11 @@ function renderCard(c, opts) {
     const archiveBtn = isArchived(c)
       ? `<button data-action="unarchive-card" data-card="${c.id}">Aus Archiv zurückholen</button>`
       : `<button data-action="archive-card" data-card="${c.id}">In Archiv verschieben</button>`;
+    const duplicateBtn = c.type === "datei"
+      ? "" : `<button data-action="duplicate" data-card="${c.id}">Als Vorlage kopieren</button>`;
     menu = `
       <button data-action="edit" data-card="${c.id}">Bearbeiten</button>
+      ${duplicateBtn}
       ${moveBtn}
       <button data-action="pin" data-card="${c.id}">${c.pinned ? "Nicht mehr anpinnen" : "Oben anpinnen"}</button>
       ${archiveBtn}
@@ -1342,6 +1388,7 @@ function renderLinkedSection(c, inTrash) {
 function renderKurznachricht(c) {
   const menu = `
     <button data-action="edit" data-card="${c.id}">Bearbeiten</button>
+    <button data-action="duplicate" data-card="${c.id}">Als Vorlage kopieren</button>
     <button class="danger" data-action="trash" data-card="${c.id}">Löschen</button>`;
   const creatorNote = c.creator_name ? ` · ${esc(c.creator_name)}` : "";
   return `
@@ -1380,18 +1427,46 @@ function renderStart(list) {
   const termine = list.filter((c) => c.type === "termin");
   const neu = hinweise.filter(isNew).length;
 
-  return `<h2 class="dash-section-label">Als Nächstes</h2>`
+  return installHintHtml()
+    + `<h2 class="dash-section-label">Als Nächstes</h2>`
     + renderNextRow(termine, list)
     + renderStundenplanStrip()
     + `<h2 class="dash-section-label">Hinweise${neu ? ` <span class="neu-count">${neu} neu</span>` : ""}</h2>`
     + renderHinweisList(hinweise);
 }
 
+// UX-Forschung 19.09.2026: Hinweise älter als 14 Tage rutschen unter
+// "Ältere Hinweise", damit die Liste kurz bleibt und Aktuelles nicht
+// versickert. Immer sichtbar bleiben: angepinnte, neue und noch offene
+// Aufgaben. Ein Sprung zu einem älteren Hinweis (Push, Link, Suche) klappt
+// die älteren auf, siehe openCardById.
+const HINWEIS_AKTUELL_TAGE = 14;
+let showOlderHinweise = false;
+
+function istAeltererHinweis(c) {
+  return new Date(c.created_at).getTime() < Date.now() - HINWEIS_AKTUELL_TAGE * 86400000
+    && !c.pinned && !isNew(c) && !(c.is_aufgabe && !aufgabeErledigt(c));
+}
+
 function renderHinweisList(hinweise) {
   if (!hinweise.length) {
     return `<p class="rubrik-panel-empty">Gerade gibt es keine Hinweise. Neue Mitteilungen der Klasse erscheinen hier.</p>`;
   }
-  return `<div class="hinweis-list">${hinweise.map(renderHinweisStrip).join("")}</div>`;
+  const istAelter = istAeltererHinweis;
+  const aktuell = hinweise.filter((c) => !istAelter(c));
+  const aelter = hinweise.filter(istAelter);
+
+  let html = aktuell.length
+    ? `<div class="hinweis-list">${aktuell.map(renderHinweisStrip).join("")}</div>`
+    : `<p class="rubrik-panel-empty">In den letzten ${HINWEIS_AKTUELL_TAGE} Tagen gab es keine neuen Hinweise.</p>`;
+  if (aelter.length) {
+    html += `
+      <button type="button" class="btn link older-toggle" data-action="toggle-older-hinweise" aria-expanded="${showOlderHinweise}">
+        ${showOlderHinweise ? "Ältere Hinweise ausblenden" : `Ältere Hinweise anzeigen (${aelter.length})`}
+      </button>`;
+    if (showOlderHinweise) html += `<div class="hinweis-list">${aelter.map(renderHinweisStrip).join("")}</div>`;
+  }
+  return html;
 }
 
 // Zugeklappt: Titel, zwei Zeilen Vorschau, wie lange her. Aufgeklappt: die
@@ -1476,15 +1551,18 @@ function renderNextRow(termine, list) {
   }
 
   const waitingTile = `
-    <button class="dash-tile dash-tile-aufgaben ${waiting ? "" : "empty"}" data-action="open-rubrik" data-type="aufgaben">
+    <button class="dash-tile dash-tile-aufgaben ${waiting ? "is-lead" : "empty"}" data-action="open-rubrik" data-type="aufgaben">
       <span class="dash-tile-aufgaben-label">Wartet auf dich</span>
       <span class="dash-tile-aufgaben-count">${waiting
         ? (waiting === 1 ? "1 Sache zu erledigen" : `${waiting} Sachen zu erledigen`)
         : "Alles erledigt"}</span>
     </button>`;
 
-  const tiles = [terminTile, waitingTile].filter(Boolean);
-  return `<div class="dash-tile-row count-${tiles.length}">${tiles.join("")}</div>`;
+  // UX-Forschung 19.09.2026: Wartet etwas, steht diese Kachel vorn und ist
+  // die kräftigste — "Muss ich etwas tun?" ist die Hauptfrage beim Öffnen.
+  // Der Termin tritt dann optisch zurück (siehe .has-waiting in style.css).
+  const tiles = (waiting ? [waitingTile, terminTile] : [terminTile, waitingTile]).filter(Boolean);
+  return `<div class="dash-tile-row count-${tiles.length} ${waiting ? "has-waiting" : ""}">${tiles.join("")}</div>`;
 }
 
 /* ---------- Termin/Kalender (gemeinsame Rubrik, siehe renderKalenderView) ---------- */
@@ -1932,7 +2010,31 @@ function renderKalenderView(termine) {
       <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="recurring">${ICONS.kalender}Wiederkehrende Ereignisse</button>
       <button type="button" class="btn small ghost" data-action="open-kalender-admin" data-screen="holidays">${ICONS.kalender}Ferien &amp; freie Tage</button>
     </div>`;
-  return `<div class="cal-wrap">${renderKalenderMonth()}</div>${renderMonatsTermine(termine)}${adminRow}`;
+  return `<div class="cal-wrap">${renderKalenderMonth()}</div>${renderKalenderAbo()}${renderMonatsTermine(termine)}${adminRow}`;
+}
+
+// Kalender-Abo (UX-Forschung 19.09.2026): einmal abonnieren, danach
+// erscheinen alle Termine der Klasse von selbst im eigenen Kalender. Der
+// Feed kommt aus der Edge Function "kalender" (supabase/functions/kalender).
+// Bei "Beide Klassen" ohne ?klasse= — dann alle Termine.
+function kalenderAboUrl() {
+  const slug = classesList.find((c) => c.id === activeClassId)?.slug || "";
+  return `${cfg.SUPABASE_URL}/functions/v1/kalender${slug ? `?klasse=${encodeURIComponent(slug)}` : ""}`;
+}
+function renderKalenderAbo() {
+  const feed = kalenderAboUrl();
+  const webcal = feed.replace(/^https?:/, "webcal:");
+  const google = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
+  return `
+    <details class="cal-add cal-abo">
+      <summary class="btn small ghost">${ICONS.kalender}<span>Alle Termine automatisch in deinen Kalender</span></summary>
+      <div class="cal-add-menu">
+        <p class="field-hint">Einmal abonnieren — neue und geänderte Termine erscheinen dann von selbst in deinem Kalender (kann ein paar Stunden dauern).</p>
+        <a class="btn small ghost" href="${esc(webcal)}">iPhone, Apple- oder Outlook-Kalender</a>
+        <a class="btn small ghost" href="${esc(google)}" target="_blank" rel="noopener noreferrer">Google Kalender</a>
+        <button type="button" class="btn small ghost" data-action="copy-kalender-abo">Abo-Link kopieren</button>
+      </div>
+    </details>`;
 }
 
 // Antippen eines Kalendertags springt direkt zum passenden Termin in der
@@ -2624,6 +2726,7 @@ function openCardById(id) {
   } else {
     view = "feed";
     openHinweisId = id;
+    if (c.type === "hinweis" && istAeltererHinweis(c)) showOlderHinweise = true;
   }
   render();
   requestAnimationFrame(() => {
@@ -2684,6 +2787,19 @@ function render() {
 
   if (NAV_BADGE_VIEWS[view]) markTabSeen(NAV_BADGE_VIEWS[view]);
   updateNavBadges();
+
+  // Bestätigungs-Animation für die Karte, bei der gerade etwas erledigt
+  // wurde (siehe celebrate) — genau einmal, nach dem neuen Zeichnen.
+  if (celebrateCardId) {
+    const id = CSS.escape(celebrateCardId);
+    celebrateCardId = null;
+    requestAnimationFrame(() => {
+      elFeed.querySelectorAll(`.card[data-card="${id}"], .kurz-bubble[data-card="${id}"]`).forEach((el) => {
+        el.classList.add("just-done");
+        el.addEventListener("animationend", () => el.classList.remove("just-done"), { once: true });
+      });
+    });
+  }
 
   // Dezente Übergangsanimation nur bei echter Navigation (ideen-backlog.md
   // #5) — eine unveränderte stille Aktualisierung (60-Sekunden-Timer) soll
@@ -2941,7 +3057,102 @@ function editorFieldsHtml(type, card) {
       <span>Oben anpinnen</span>
     </label>`;
 
+  // UX-Forschung 19.09.2026 / migration-028: Push nur beim Anlegen wählbar
+  // (verschickt wird beim Anlegen, nicht beim Bearbeiten). Bei Dateien
+  // standardmäßig aus — Fotoserien lösten sonst eine Nachricht pro Bild aus.
+  if (!card) {
+    html += `
+      <label class="field-check">
+        <input type="checkbox" name="notify" ${type === "datei" ? "" : "checked"}>
+        <span>Eltern per Push benachrichtigen</span>
+      </label>
+      <p class="field-hint">Ohne Häkchen erscheint der Eintrag nur als „Neu“ in der App.${type === "datei"
+        ? " Bei mehreren Fotos hintereinander am besten nur beim letzten anhaken." : ""}</p>`;
+  }
+
   return html;
+}
+
+// Formular im Editor vorbefüllen — für "Als Vorlage kopieren" und für einen
+// wiederhergestellten Entwurf. values: { feldname: Wert }, "body" geht bei
+// Hinweis/Termin in das Textfeld mit Formatierung.
+function fillEditorForm(values) {
+  const form = $("editorForm");
+  for (const [name, value] of Object.entries(values || {})) {
+    if (name === "body" && $("rteEditor")) {
+      $("rteEditor").innerHTML = sanitizeRich(value || "");
+      continue;
+    }
+    form.querySelectorAll(`[name="${CSS.escape(name)}"]`).forEach((el) => {
+      if (el.type === "file") return;
+      if (el.type === "checkbox") el.checked = !!value;
+      else if (el.type === "radio") el.checked = el.value === value;
+      else if (value !== undefined && value !== null) el.value = value;
+    });
+  }
+}
+
+// Gegenstück zu fillEditorForm: aktueller Formularinhalt als Werte-Objekt.
+function readEditorValues() {
+  const values = {};
+  for (const el of $("editorForm").elements) {
+    if (!el.name || el.type === "file") continue;
+    if (el.type === "checkbox") values[el.name] = el.checked;
+    else if (el.type === "radio") { if (el.checked) values[el.name] = el.value; }
+    else values[el.name] = el.value;
+  }
+  if ($("rteEditor")) values.body = $("rteEditor").innerHTML;
+  return values;
+}
+
+// "Als Vorlage kopieren" (UX-Forschung 19.09.2026): Inhalt einer Karte als
+// Startpunkt für eine neue. Datum, Frist und Anpinnen bleiben leer — die
+// gehören zum neuen Anlass. Bilder/Anhänge werden nicht mitkopiert (die
+// Dateien gehören zur alten Karte und werden mit ihr irgendwann gelöscht).
+function templateFromCard(c) {
+  const presetItems = (c.list_items || [])
+    .filter((it) => c.list_mode !== "eintragen" || it.preset)
+    .map((it) => it.text);
+  return {
+    title: c.title,
+    body: (c.type === "hinweis" || c.type === "termin")
+      ? String(c.body || "").replace(/<img\b[^>]*>/gi, "")
+      : (c.body || ""),
+    event_time: c.event_time ? c.event_time.slice(0, 5) : "",
+    event_location: c.event_location || "",
+    is_kurznachricht: !!c.is_kurznachricht,
+    is_aufgabe: !!c.is_aufgabe,
+    class_id: c.class_id || "",
+    list_mode: c.list_mode || "abhaken",
+    items: presetItems.join("\n"),
+    capacity: c.capacity ?? "",
+    table_columns: (c.table_columns || []).join("\n"),
+    options: (c.poll_options || [])
+      .map((o) => o.label + (o.capacity ? ` (${o.capacity})` : "")).join("\n"),
+    multi_select: !!c.multi_select,
+    poll_named: !!c.poll_named,
+  };
+}
+
+// Entwürfe beim Anlegen (UX-Forschung 19.09.2026): der Editor sichert sich
+// beim Tippen auf dem Gerät, damit nichts verloren geht, wenn man mitten
+// im Schreiben unterbrochen wird. Einer je Kartentyp, 14 Tage lang.
+const DRAFT_PREFIX = "pinnwand_entwurf_";
+const DRAFT_MAX_AGE_MS = 14 * 86400000;
+function loadDraft(type) {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_PREFIX + type));
+    if (!d || Date.now() - d.savedAt > DRAFT_MAX_AGE_MS) return null;
+    return d;
+  } catch { return null; }
+}
+function clearDraft(type) {
+  localStorage.removeItem(DRAFT_PREFIX + type);
+}
+function draftHasContent(values) {
+  const body = String(values.body || "").replace(/<[^>]*>/g, "").trim();
+  return !!(String(values.title || "").trim() || body || String(values.items || "").trim()
+    || String(values.options || "").trim() || String(values.table_columns || "").trim());
 }
 
 function renderEditItems() {
@@ -2970,7 +3181,8 @@ function renderEditOptions() {
     .join("");
 }
 
-function openEditor(type, card = null, parentId = null) {
+// template: { title, values } aus "Als Vorlage kopieren" (nur beim Anlegen).
+function openEditor(type, card = null, parentId = null, template = null) {
   editorState = {
     mode: card ? "edit" : "create",
     type,
@@ -3053,6 +3265,53 @@ function openEditor(type, card = null, parentId = null) {
         folderSel.innerHTML = folderOptionsHtml(classSel.value, "");
       });
     }
+  }
+
+  // Vorlage bzw. Entwurf (UX-Forschung 19.09.2026). Die Formular-Handler
+  // werden als Eigenschaft gesetzt statt per addEventListener, weil das
+  // Formular über alle Editor-Öffnungen hinweg dasselbe Element bleibt —
+  // sonst sammelten sich pro Öffnung weitere Speicher-Handler an.
+  const form = $("editorForm");
+  const note = $("editorNote");
+  note.hidden = true;
+  note.innerHTML = "";
+  form.oninput = null;
+  form.onchange = null;
+  if (!card && type !== "datei") {
+    if (template) {
+      fillEditorForm(template.values);
+      note.textContent = `Kopie von „${template.title}“ — Datum und Frist bitte neu setzen. Bilder und Anhänge werden nicht mitkopiert.`;
+      note.hidden = false;
+    } else {
+      const draft = loadDraft(type);
+      if (draft && draftHasContent(draft.values)) {
+        fillEditorForm(draft.values);
+        note.innerHTML = `Dein Entwurf vom ${esc(fmtTimestamp(draft.savedAt))} ist wiederhergestellt.
+          <button type="button" class="btn link" data-action="draft-discard">Verwerfen</button>`;
+        note.hidden = false;
+      }
+    }
+    let saveTimer = null;
+    const saveDraft = () => {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        const values = readEditorValues();
+        if (draftHasContent(values)) {
+          localStorage.setItem(DRAFT_PREFIX + type, JSON.stringify({ savedAt: Date.now(), values }));
+        }
+      }, 500);
+    };
+    form.oninput = saveDraft;
+    form.onchange = saveDraft;
+    // Nach erfolgreichem Speichern aufgerufen — eine noch ausstehende,
+    // verzögerte Sicherung würde sonst den gerade gelöschten Entwurf
+    // wieder anlegen.
+    editorState.stopDraft = () => {
+      clearTimeout(saveTimer);
+      form.oninput = null;
+      form.onchange = null;
+      clearDraft(type);
+    };
   }
 
   dlgEditor.showModal();
@@ -3314,9 +3573,12 @@ async function submitEditor() {
       if ((st.type === "hinweis" || st.type === "termin") && st.attachments.length) {
         p.attachments = st.attachments;
       }
+      // migration-028: ältere Datenbanken ignorieren das Feld einfach.
+      p.notify = fd.get("notify") === "on";
 
       await rpc("create_card", { p });
-      toast("Karte erstellt.");
+      if (st.stopDraft) st.stopDraft();
+      toast(p.notify ? "Karte erstellt." : "Karte erstellt — ohne Push-Benachrichtigung.");
     } else {
       const p = { ...common };
       if (st.type === "termin") {
@@ -3394,6 +3656,14 @@ function cardById(id) {
   return cards.find((c) => c.id === id);
 }
 
+// UX-Forschung 19.09.2026: eine kurze, ruhige Bestätigung beim Erledigen
+// (Abstimmen, Eintragen, Abhaken) statt eines Pop-ups — ausgelöst beim
+// nächsten render(), damit sie die neu gezeichnete Karte trifft.
+let celebrateCardId = null;
+function celebrate(cardId) {
+  if (cardId) celebrateCardId = cardId;
+}
+
 // onSuccess läuft nur nach erfolgreichem Speichern und noch vor dem
 // Neuladen — z. B. um "mitgemacht" zu merken, damit das neue Rendern den
 // Stand schon berücksichtigt.
@@ -3417,7 +3687,7 @@ async function doAction(fn, successMsg, onSuccess) {
 // eigentliche Absicherung liegt in der Datenbank (migration-021,
 // p_admin_code) — diese Prüfung hier ist nur für eine saubere Oberfläche.
 const ADMIN_NUR_HAUPTLINK = new Set([
-  "edit", "pin", "trash", "restore", "delete-forever", "add-linked", "empty-trash",
+  "edit", "duplicate", "pin", "trash", "restore", "delete-forever", "add-linked", "empty-trash",
   "create-folder", "rename-folder", "delete-folder", "move-file",
   "archive-card", "unarchive-card", "open-kalender-admin", "edit-stundenplan",
 ]);
@@ -3438,6 +3708,29 @@ async function handleFeedClick(ev) {
     toast("Kontingent voll — zusätzlicher Springer: bereit zu helfen, falls doch noch jemand gebraucht wird.");
     return;
   }
+  if (action === "copy-kalender-abo") {
+    try {
+      await navigator.clipboard.writeText(kalenderAboUrl());
+      toast("Abo-Link kopiert — in deinem Kalender unter „Kalender abonnieren“ bzw. „Per URL hinzufügen“ einfügen.", false, 6000);
+    } catch {
+      toast("Link konnte nicht kopiert werden.", true);
+    }
+    return;
+  }
+  if (action === "install-hint-close") {
+    localStorage.setItem(INSTALL_HINT_KEY, String(Date.now() + INSTALL_HINT_PAUSE_MS));
+    render();
+    return;
+  }
+  if (action === "install-app") {
+    if (!deferredInstallPrompt) return;
+    const promptEvent = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+    promptEvent.prompt();
+    try { await promptEvent.userChoice; } catch { /* abgebrochen */ }
+    render();
+    return;
+  }
 
   const cardId = btn.dataset.card;
   const itemId = btn.dataset.item;
@@ -3446,6 +3739,11 @@ async function handleFeedClick(ev) {
     case "edit": {
       const c = cardById(cardId);
       if (c) openEditor(c.type, c);
+      break;
+    }
+    case "duplicate": {
+      const c = cardById(cardId);
+      if (c) openEditor(c.type, null, null, { title: c.title, values: templateFromCard(c) });
       break;
     }
     case "pin": {
@@ -3606,6 +3904,11 @@ async function handleFeedClick(ev) {
       render();
       break;
     }
+    case "toggle-older-hinweise": {
+      showOlderHinweise = !showOlderHinweise;
+      render();
+      break;
+    }
     case "open-card": {
       openCardById(btn.dataset.card);
       break;
@@ -3621,6 +3924,7 @@ async function handleFeedClick(ev) {
     case "aufgabe-done":
     case "aufgabe-undo": {
       setAufgabeErledigt(btn.dataset.card, action === "aufgabe-done");
+      if (action === "aufgabe-done") celebrate(btn.dataset.card);
       render();
       break;
     }
@@ -3670,7 +3974,7 @@ async function handleFeedClick(ev) {
         [{ name: "name", label: "Name", placeholder: "z. B. Anna M.", maxlength: 80 }]);
       const ownCard = btn.closest(".card")?.dataset.card;
       if (vals) await doAction(() => rpc("set_item_filled", { p_item_id: itemId, p_name: vals.name }),
-        "Eingetragen — danke!", () => markMitgemacht(ownCard));
+        "Eingetragen — danke!", () => { markMitgemacht(ownCard); celebrate(ownCard); });
       break;
     }
     case "item-unfill": {
@@ -3690,7 +3994,7 @@ async function handleFeedClick(ev) {
       ]);
       if (vals) await doAction(() => rpc("add_list_item",
         { p_card_id: cardId, p_text: vals.text, p_filled_by: vals.name }), "Eingetragen — danke!",
-        () => markMitgemacht(cardId));
+        () => { markMitgemacht(cardId); celebrate(cardId); });
       break;
     }
     case "row-add": {
@@ -3744,7 +4048,7 @@ async function handleFeedClick(ev) {
       pollEditing.delete(cardId);
       await doAction(() => rpc("cast_vote",
         { p_card_id: cardId, p_option_ids: chosen, p_device_token: deviceToken, p_voter_name: voterName }),
-        "Stimme gespeichert.");
+        "Stimme gespeichert.", () => celebrate(cardId));
       break;
     }
     case "feedback-submit": {
@@ -3800,7 +4104,7 @@ async function handleFeedChange(ev) {
     box.disabled = true;
     try {
       await rpc("set_item_checked", { p_item_id: box.dataset.item, p_checked: wanted });
-      if (wanted) markMitgemacht(ownCard);
+      if (wanted) { markMitgemacht(ownCard); celebrate(ownCard); }
       await reload({ silent: true });
     } catch (err) {
       box.checked = !wanted;
@@ -3896,6 +4200,63 @@ function urlBase64ToUint8Array(base64String) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+/* ---------- Als App installieren (UX-Forschung 19.09.2026) ---------- */
+// Im Browser-Tab löscht Safari auf dem iPhone den Gerätespeicher einer
+// Seite, wenn man sie eine Weile nicht öffnet — damit wären "erledigt",
+// "mitgemacht", die eigene Abstimmung und die Klassen-Sperre weg. Als
+// installierte App passiert das nicht, und nur dort gibt es auf dem iPhone
+// Push. Deshalb ein ruhiger, wegklickbarer Streifen auf der Startseite
+// (kein Pop-up), solange die App nicht installiert ist.
+
+const INSTALL_HINT_KEY = "pinnwand_installhinweis_bis";
+const INSTALL_HINT_PAUSE_MS = 30 * 86400000;
+let deferredInstallPrompt = null;
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+}
+function isIOS() {
+  return /iPhone|iPad|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function installHintHtml() {
+  if (isStandalone()) return "";
+  if (Date.now() < Number(localStorage.getItem(INSTALL_HINT_KEY) || 0)) return "";
+  const close = `<button type="button" class="install-hint-close" data-action="install-hint-close" aria-label="Hinweis ausblenden">✕</button>`;
+  const why = "So bleiben deine Häkchen gespeichert, und du kannst Benachrichtigungen bekommen.";
+  if (deferredInstallPrompt) {
+    return `
+      <div class="install-hint">
+        ${ICONS.install}
+        <div class="install-hint-text"><b>Pinnwand als App speichern</b><span>${why}</span></div>
+        <button type="button" class="btn small primary" data-action="install-app">Installieren</button>
+        ${close}
+      </div>`;
+  }
+  if (isIOS()) {
+    return `
+      <div class="install-hint">
+        ${ICONS.install}
+        <div class="install-hint-text"><b>Pinnwand als App speichern</b>
+          <span>${why} Unten auf <span class="install-hint-icon" aria-label="Teilen">${ICONS.iosShare}</span> tippen, dann „Zum Home-Bildschirm“.</span></div>
+        ${close}
+      </div>`;
+  }
+  // Andere Handy-Browser ohne eigene Installations-Abfrage — am Computer
+  // bringt der Hinweis nichts, dort bleibt der Speicher erhalten.
+  if (window.matchMedia("(pointer: coarse)").matches) {
+    return `
+      <div class="install-hint">
+        ${ICONS.install}
+        <div class="install-hint-text"><b>Pinnwand als App speichern</b>
+          <span>${why} Im Browser-Menü „Zum Startbildschirm hinzufügen“ wählen.</span></div>
+        ${close}
+      </div>`;
+  }
+  return "";
 }
 
 function pushSupported() {
@@ -4090,6 +4451,13 @@ async function init() {
     submitEditor();
   });
   dlgEditor.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-action='draft-discard']")) {
+      const { type, parentId } = editorState;
+      if (editorState.stopDraft) editorState.stopDraft();
+      dlgEditor.close();
+      openEditor(type, null, parentId);
+      return;
+    }
     if (ev.target.closest("[data-close]")) dlgEditor.close();
   });
   dlgPrompt.addEventListener("click", (ev) => {
@@ -4101,7 +4469,31 @@ async function init() {
     elPushBell.innerHTML = ICONS.bell;
     elPushBell.addEventListener("click", togglePush);
     refreshBellState();
+  } else if (elPushBell && isIOS() && !isStandalone()) {
+    // UX-Forschung 19.09.2026: Auf dem iPhone gibt es Push nur für die
+    // installierte App. Statt die Glocke kommentarlos wegzulassen, erklärt
+    // sie beim Antippen, wie man hinkommt.
+    elPushBell.hidden = false;
+    elPushBell.innerHTML = ICONS.bell;
+    elPushBell.classList.add("unavailable");
+    elPushBell.title = "Benachrichtigungen gibt es auf dem iPhone nur in der installierten App";
+    elPushBell.setAttribute("aria-label", elPushBell.title);
+    elPushBell.addEventListener("click", () => toast(
+      "Benachrichtigungen gibt es auf dem iPhone nur, wenn die Pinnwand als App installiert ist: unten auf Teilen tippen, dann „Zum Home-Bildschirm“. Danach die App über das neue Symbol öffnen und hier auf die Glocke tippen.",
+      false, 9000));
   }
+
+  // Android/Chrome bieten die Installation selbst an — die Abfrage wird
+  // gemerkt und erst auf den "Installieren"-Knopf im Hinweis gezeigt.
+  window.addEventListener("beforeinstallprompt", (ev) => {
+    ev.preventDefault();
+    deferredInstallPrompt = ev;
+    if (loaded && view === "feed") render();
+  });
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    if (loaded && view === "feed") render();
+  });
 
   if (elVersionBtn) {
     renderVersionDialog();
@@ -4135,6 +4527,16 @@ async function init() {
         render();
       }
       if (ev.target.closest("[data-close]")) dlgMore.close();
+    });
+  }
+
+  if (dlgTranslate && $("moreTranslateBtn")) {
+    $("moreTranslateBtn").addEventListener("click", () => {
+      $("translateStandaloneNote").hidden = !isStandalone();
+      dlgTranslate.showModal();
+    });
+    dlgTranslate.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-close]")) dlgTranslate.close();
     });
   }
 

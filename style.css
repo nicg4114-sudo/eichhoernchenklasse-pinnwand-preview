@@ -57,6 +57,10 @@
   --ok-bg:     #e8f3ea;
   --important:    #c8891b;
   --important-bg: #fdf1de;
+  /* Für Text und Ränder: --important selbst erreicht auf Weiß nur 2,97:1
+     und auf --important-bg 2,7:1 — zu wenig für kleinen Text (4,5:1). Dieser
+     Ton liegt bei 5,0:1 auf --important-bg (UX-Forschung 19.09.2026). */
+  --important-dk: #8f5d0c;
   --radius:    16px;
   --radius-sm: 10px;
   --shadow:    0 1px 2px rgba(38, 28, 12, .06), 0 6px 18px -10px rgba(38, 28, 12, .12);
@@ -163,7 +167,10 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
   letter-spacing: -.02em;
 }
 
+/* flex: 1 — sonst ist die Zeile nur so breit wie der Titel, und Lupe/Glocke
+   kleben direkt daneben statt am rechten Rand (fiel beim Klassen-Link auf). */
 .brand-row {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -523,7 +530,7 @@ main {
    wie vom vorherigen Abschnitt entfernt steht (Design-Review 18.09.2026). */
 .feed > .dash-section-label { margin-bottom: -10px; }
 .feed > .dash-section-label + .dash-tile-row { margin-top: 0; }
-.dash-section-label.warn { color: var(--important); }
+.dash-section-label.warn { color: var(--important-dk); }
 .dash-section-label svg { width: 13px; height: 13px; }
 
 /* "Als Nächstes" auf der Startseite: Nächster Termin und "Wartet auf dich"
@@ -582,12 +589,28 @@ main {
   font: inherit;
 }
 .dash-tile-aufgaben.empty { border-color: var(--line); background: var(--line-soft); }
+/* UX-Forschung 19.09.2026: Wartet etwas, führt diese Kachel (steht vorn,
+   kräftiger Rand, größere Zahl), der Termin daneben tritt zurück — "eine
+   Sache führt" statt zwei gleich lauter Kacheln. Bewusst kein vollflächiges
+   Bernstein: weiße Schrift darauf käme nur auf 2,97:1. */
+.dash-tile-aufgaben.is-lead {
+  border: 2px solid var(--important-dk);
+  background: var(--important-bg);
+}
+.dash-tile-aufgaben.is-lead .dash-tile-aufgaben-count { font-size: 1rem; font-weight: 800; }
+.dash-tile-row.has-waiting .dash-tile-termin {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.dash-tile-row.has-waiting .dash-tile-termin-date,
+.dash-tile-row.has-waiting .dash-tile-termin-title { color: var(--c-termin); }
 .dash-tile-aufgaben-label {
   font-size: .68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .03em;
-  color: var(--important);
+  color: var(--important-dk);
 }
 .dash-tile-aufgaben.empty .dash-tile-aufgaben-label { color: var(--muted); }
 .dash-tile-aufgaben-count { font-size: .84rem; font-weight: 700; color: var(--ink); }
@@ -605,7 +628,7 @@ main {
   border-top: 1px dashed var(--line);
   font-size: .82rem;
   font-weight: 600;
-  color: var(--important);
+  color: var(--important-dk);
 }
 .card-aufgabe.done { color: var(--ok); }
 .aufgabe-check {
@@ -628,7 +651,7 @@ main {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 2px solid var(--important);
+  border: 2px solid var(--important-dk);
   background: var(--card);
 }
 .aufgabe-check.is-done::before { border-color: var(--ok); background: var(--ok); }
@@ -744,6 +767,83 @@ span.aufgabe-check { cursor: default; }
   color: var(--accent-dk);
 }
 .group-label-spaced { margin-top: 22px; }
+
+/* ---------- UX-Forschung 19.09.2026 ---------- */
+
+/* Hinweis "Als App speichern" auf der Startseite (siehe installHintHtml) —
+   ruhiger Streifen im Fluss der Seite, kein Pop-up. */
+.install-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 6px 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+}
+.install-hint > svg { width: 24px; height: 24px; flex: 0 0 auto; color: var(--accent-dk); }
+.install-hint-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; font-size: .82rem; }
+.install-hint-text b { font-size: .88rem; }
+.install-hint-text span { color: var(--muted); }
+.install-hint-icon { display: inline-flex; vertical-align: -3px; color: var(--ink); }
+.install-hint-icon svg { width: 16px; height: 16px; }
+.install-hint .btn { flex: 0 0 auto; }
+.install-hint-close {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 50%;
+}
+.install-hint-close:hover { background: var(--bg); color: var(--ink); }
+
+/* Glocke auf dem iPhone im Browser: erklärt beim Antippen, dass Push nur in
+   der installierten App geht (siehe init). */
+.push-bell.unavailable { opacity: .55; }
+
+/* "Ältere Hinweise anzeigen (n)" unter der Hinweis-Liste. */
+.older-toggle { align-self: flex-start; margin-top: -8px; }
+
+/* Kurze, ruhige Bestätigung beim Erledigen (siehe celebrate in app.js). */
+@keyframes justDone {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 45%, transparent); }
+  100% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--ok) 0%, transparent); }
+}
+@keyframes checkPop {
+  0%   { transform: scale(.4); }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.just-done { animation: justDone .7s ease-out; }
+.just-done .aufgabe-check.is-done svg,
+.just-done .mine { display: inline-block; animation: checkPop .35s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .just-done, .just-done .aufgabe-check.is-done svg, .just-done .mine { animation: none; }
+}
+
+/* "Sprache · Language" (dlgTranslate). */
+.translate-en { margin: 0 0 10px; color: var(--muted); font-style: italic; }
+.translate-steps { margin: 0 0 12px; padding-left: 18px; font-size: .9rem; }
+.translate-steps li { margin-bottom: 6px; }
+
+/* Hinweis im Editor: "Kopie von …" / "Entwurf wiederhergestellt". */
+.editor-note:not([hidden]) {
+  display: block;
+  margin: -6px 0 14px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  color: var(--accent-dk);
+  font-size: .84rem;
+}
+/* min-height: Tipp-Fläche mindestens 24px (war 21px, WCAG 2.5.8). */
+.editor-note .btn.link { padding: 0 6px; font-size: .84rem; min-height: 32px; vertical-align: middle; }
+
+/* Kalender-Abo unter dem Monatskalender. */
+.cal-abo { margin: 0; }
 
 /* ---------- Hinweis-Rubrik: Kurznachrichten-Feed ---------- */
 
@@ -928,7 +1028,7 @@ span.aufgabe-check { cursor: default; }
   align-items: center;
   gap: 4px;
   font-size: .8rem;
-  color: var(--important);
+  color: var(--important-dk);
   font-weight: 700;
 }
 
@@ -1060,6 +1160,9 @@ span.aufgabe-check { cursor: default; }
 /* "Zum Kalender hinzufügen" mit Auswahl (Design-Review 18.09.2026) —
    natives <details>, klappt die zwei Ziele darunter auf. */
 .cal-add { margin: -2px 0 10px; }
+/* Links, die wie Knöpfe aussehen, ohne Unterstrich — sonst sehen im selben
+   Menü zwei Einträge anders aus als der dritte (ein echter <button>). */
+.cal-add-menu a.btn { text-decoration: none; }
 .cal-add > summary {
   display: inline-flex;
   align-items: center;

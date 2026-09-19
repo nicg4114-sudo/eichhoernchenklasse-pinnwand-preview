@@ -119,6 +119,14 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15.5L8 5h1l4 10.5"/><path d="M5.2 12.5h6.6"/><path d="M13.5 15.5l2.7-6.5h.6l2.7 6.5"/></svg>
       <span id="moreFontSizeBtnLabel">Große Schrift</span>
     </button>
+    <!-- UX-Forschung 19.09.2026: Übersetzung über die eingebaute Funktion des
+         Browsers (kostenlos, ohne Weitergabe an einen weiteren Dienst) —
+         zweisprachig beschriftet, damit man den Punkt auch ohne
+         Deutschkenntnisse findet. -->
+    <button class="more-item" id="moreTranslateBtn" type="button" data-close>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.25"/><path d="M2.9 10h14.2"/><path d="M10 2.75c2 2 3 4.5 3 7.25s-1 5.25-3 7.25c-2-2-3-4.5-3-7.25s1-5.25 3-7.25z"/></svg>
+      <span>Sprache · Language</span>
+    </button>
     <!-- ideen-backlog.md #19: nur am Hauptlink sichtbar (per JS ausgeblendet
          bei Klassen-Link), Beschriftung/Wirkung je nach Admin-Status per JS. -->
     <button class="more-item" id="moreAdminBtn" type="button" data-close>
@@ -153,6 +161,8 @@
 <dialog id="dlgEditor" class="dlg">
   <form id="editorForm" novalidate>
     <h2 id="editorTitle">Neu</h2>
+    <!-- Hinweis "Kopie von …" bzw. "Entwurf wiederhergestellt" (siehe openEditor) -->
+    <div id="editorNote" class="editor-note" hidden></div>
     <div id="editorFields"></div>
     <p id="editorError" class="form-error" hidden></p>
     <div class="dlg-actions">
@@ -199,6 +209,23 @@
   <div id="searchResults" class="search-results"></div>
   <div class="dlg-actions">
     <button type="button" class="btn ghost" data-close>Schließen</button>
+  </div>
+</dialog>
+
+<!-- Pinnwand übersetzen lassen (UX-Forschung 19.09.2026) — Anleitung für
+     die eingebaute Übersetzung des Browsers. In der installierten App fehlt
+     die Adresszeile; der Hinweis dazu wird per JS eingeblendet. -->
+<dialog id="dlgTranslate" class="dlg small">
+  <h2>In einer anderen Sprache lesen</h2>
+  <p class="translate-en" lang="en">Your browser can translate this page into your language.
+    Android (Chrome): menu (three dots) → “Translate”. iPhone (Safari): tap “aA” in the address bar → “Translate”.</p>
+  <ul class="translate-steps">
+    <li><b>Android (Chrome):</b> oben rechts das Menü (drei Punkte) öffnen, dann „Übersetzen“ und die Sprache wählen.</li>
+    <li><b>iPhone (Safari):</b> in der Adresszeile auf „aA“ tippen, dann „In … übersetzen“.</li>
+  </ul>
+  <p id="translateStandaloneNote" class="rubrik-panel-hint" hidden>In der installierten App gibt es keine Adresszeile. Zum Übersetzen den Link der Pinnwand im Browser öffnen.</p>
+  <div class="dlg-actions">
+    <button type="button" class="btn primary" data-close>Alles klar</button>
   </div>
 </dialog>
 
