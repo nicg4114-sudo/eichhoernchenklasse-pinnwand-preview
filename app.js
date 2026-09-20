@@ -72,7 +72,6 @@ const VERSIONS = [
     items: [
       "Alle Termine automatisch im eigenen Kalender: unter dem Monatskalender einmal abonnieren, neue und geänderte Termine kommen dann von selbst.",
       "Tipp auf der Startseite, wie du die Pinnwand als App speicherst — lässt sich wegklicken.",
-      "Ältere Hinweise sind eingeklappt, damit das Aktuelle oben bleibt.",
       "„Sprache · Language“ im Mehr-Menü erklärt, wie der Browser die Pinnwand übersetzt.",
     ],
   },
@@ -1435,38 +1434,11 @@ function renderStart(list) {
     + renderHinweisList(hinweise);
 }
 
-// UX-Forschung 19.09.2026: Hinweise älter als 14 Tage rutschen unter
-// "Ältere Hinweise", damit die Liste kurz bleibt und Aktuelles nicht
-// versickert. Immer sichtbar bleiben: angepinnte, neue und noch offene
-// Aufgaben. Ein Sprung zu einem älteren Hinweis (Push, Link, Suche) klappt
-// die älteren auf, siehe openCardById.
-const HINWEIS_AKTUELL_TAGE = 14;
-let showOlderHinweise = false;
-
-function istAeltererHinweis(c) {
-  return new Date(c.created_at).getTime() < Date.now() - HINWEIS_AKTUELL_TAGE * 86400000
-    && !c.pinned && !isNew(c) && !(c.is_aufgabe && !aufgabeErledigt(c));
-}
-
 function renderHinweisList(hinweise) {
   if (!hinweise.length) {
     return `<p class="rubrik-panel-empty">Gerade gibt es keine Hinweise. Neue Mitteilungen der Klasse erscheinen hier.</p>`;
   }
-  const istAelter = istAeltererHinweis;
-  const aktuell = hinweise.filter((c) => !istAelter(c));
-  const aelter = hinweise.filter(istAelter);
-
-  let html = aktuell.length
-    ? `<div class="hinweis-list">${aktuell.map(renderHinweisStrip).join("")}</div>`
-    : `<p class="rubrik-panel-empty">In den letzten ${HINWEIS_AKTUELL_TAGE} Tagen gab es keine neuen Hinweise.</p>`;
-  if (aelter.length) {
-    html += `
-      <button type="button" class="btn link older-toggle" data-action="toggle-older-hinweise" aria-expanded="${showOlderHinweise}">
-        ${showOlderHinweise ? "Ältere Hinweise ausblenden" : `Ältere Hinweise anzeigen (${aelter.length})`}
-      </button>`;
-    if (showOlderHinweise) html += `<div class="hinweis-list">${aelter.map(renderHinweisStrip).join("")}</div>`;
-  }
-  return html;
+  return `<div class="hinweis-list">${hinweise.map(renderHinweisStrip).join("")}</div>`;
 }
 
 // Zugeklappt: Titel, zwei Zeilen Vorschau, wie lange her. Aufgeklappt: die
@@ -2726,7 +2698,6 @@ function openCardById(id) {
   } else {
     view = "feed";
     openHinweisId = id;
-    if (c.type === "hinweis" && istAeltererHinweis(c)) showOlderHinweise = true;
   }
   render();
   requestAnimationFrame(() => {
@@ -3901,11 +3872,6 @@ async function handleFeedClick(ev) {
     case "toggle-hinweis-strip": {
       const id = btn.dataset.card;
       openHinweisId = openHinweisId === id ? null : id;
-      render();
-      break;
-    }
-    case "toggle-older-hinweise": {
-      showOlderHinweise = !showOlderHinweise;
       render();
       break;
     }

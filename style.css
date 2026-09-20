@@ -804,8 +804,6 @@ span.aufgabe-check { cursor: default; }
    der installierten App geht (siehe init). */
 .push-bell.unavailable { opacity: .55; }
 
-/* "Ältere Hinweise anzeigen (n)" unter der Hinweis-Liste. */
-.older-toggle { align-self: flex-start; margin-top: -8px; }
 
 /* Kurze, ruhige Bestätigung beim Erledigen (siehe celebrate in app.js). */
 @keyframes justDone {
