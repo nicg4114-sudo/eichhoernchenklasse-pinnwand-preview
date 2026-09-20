@@ -70,8 +70,12 @@ const VERSIONS = [
   {
     version: "19.09.2026",
     items: [
+      "Neu: Anmeldung mit einem Passwort. Gib einmal den Namen deiner Klasse ein und du landest direkt in deinem Bereich. Zum Wechseln: „Mehr“ → „Abmelden / Klasse wechseln“.",
+      "Die Kopfzeile mit Titel und Suche bleibt beim Scrollen oben stehen.",
+      "Feedback geben geht jetzt über den runden Knopf oben neben der Suche.",
       "Alle Termine automatisch im eigenen Kalender: unter dem Monatskalender einmal abonnieren, neue und geänderte Termine kommen dann von selbst.",
       "Tipp auf der Startseite, wie du die Pinnwand als App speicherst — lässt sich wegklicken.",
+      "Ältere Hinweise sind eingeklappt, damit das Aktuelle oben bleibt.",
       "„Sprache · Language“ im Mehr-Menü erklärt, wie der Browser die Pinnwand übersetzt.",
     ],
   },
@@ -366,12 +370,12 @@ const dlgConfirm = $("dlgConfirm");
 const dlgPrompt = $("dlgPrompt");
 const dlgVersion = $("dlgVersion");
 const dlgTranslate = $("dlgTranslate");
+const dlgLogin = $("dlgLogin");
 const elVersionBtn = $("moreVersionBtn");
 const dlgMore = $("dlgMore");
 const elMoreBtn = $("moreBtn");
-const elFeedbackBadge = $("moreFeedbackBadge");
-const elFontSizeBtn = $("moreFontSizeBtn");
-const elFontSizeBtnLabel = $("moreFontSizeBtnLabel");
+const elFeedbackBadge = $("feedbackBadge");
+const elFeedbackBtn = $("feedbackBtn");
 const elAdminBtn = $("moreAdminBtn");
 const elAdminBtnLabel = $("moreAdminBtnLabel");
 const elArchivBtn = $("moreArchivBtn");
@@ -636,7 +640,7 @@ function toast(msg, isError = false, ms = 0) {
 }
 
 function anyDialogOpen() {
-  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgSearch, dlgTranslate].some((d) => d && d.open);
+  return [dlgType, dlgEditor, dlgConfirm, dlgPrompt, dlgVersion, dlgMore, dlgKalenderAdmin, dlgSearch, dlgTranslate, dlgLogin].some((d) => d && d.open);
 }
 
 /* ---------- API ---------- */
@@ -716,25 +720,13 @@ async function loadClasses() {
 // nicht öffnet, und eine installierte Web-App hat dort einen eigenen
 // Speicher. Mit der Klasse in Lesezeichen/App-Symbol stellt sie sich dann
 // von selbst wieder her, statt auf "Beide Klassen" zu fallen.
+//
+// Nutzerwunsch 20.09.2026: Ein Klassen-Link sperrt das Gerät nicht mehr von
+// selbst. Die Klasse legt allein die Anmeldung fest (askLogin) — so landet
+// jeder mit seinem Passwort in seinem Bereich, egal welchen Link er hat, und
+// ein weitergeleiteter Link stellt keine Klasse um. Der Link bringt nur noch
+// das Klassen-Symbol/-Manifest mit (syncClassInUrl), sobald angemeldet.
 function applyClassLink() {
-  const slug = new URLSearchParams(location.search).get("klasse");
-  if (slug) {
-    const cls = classesList.find((c) => c.slug === slug);
-    // Ein geteilter Karten-Link ("#karte-…") trägt die Klasse des Geräts, das
-    // ihn geteilt hat. Er darf eine hier schon festgelegte ANDERE Klasse
-    // nicht umstellen — sonst landete z. B. ein Schmetterlings-Elternteil
-    // nach einem weitergeleiteten Link dauerhaft in der Eichhörnchenklasse.
-    const lockedSlug = classLocked ? localStorage.getItem(CLASS_SLUG_KEY) : null;
-    const fremderTeilenLink = location.hash.startsWith("#karte-") && lockedSlug && lockedSlug !== slug;
-    if (cls && !fremderTeilenLink) {
-      activeClassId = cls.id;
-      classLocked = true;
-      localStorage.setItem(CLASS_KEY, activeClassId);
-      localStorage.setItem(CLASS_LOCK_KEY, "1");
-      localStorage.setItem(CLASS_SLUG_KEY, slug);
-      applyClassTheme(slug);
-    }
-  }
   syncClassInUrl();
 }
 
@@ -1434,11 +1426,38 @@ function renderStart(list) {
     + renderHinweisList(hinweise);
 }
 
+// UX-Forschung 19.09.2026: Hinweise älter als 14 Tage rutschen unter
+// "Ältere Hinweise", damit die Liste kurz bleibt und Aktuelles nicht
+// versickert. Immer sichtbar bleiben: angepinnte, neue und noch offene
+// Aufgaben. Ein Sprung zu einem älteren Hinweis (Push, Link, Suche) klappt
+// die älteren auf, siehe openCardById.
+const HINWEIS_AKTUELL_TAGE = 14;
+let showOlderHinweise = false;
+
+function istAeltererHinweis(c) {
+  return new Date(c.created_at).getTime() < Date.now() - HINWEIS_AKTUELL_TAGE * 86400000
+    && !c.pinned && !isNew(c) && !(c.is_aufgabe && !aufgabeErledigt(c));
+}
+
 function renderHinweisList(hinweise) {
   if (!hinweise.length) {
     return `<p class="rubrik-panel-empty">Gerade gibt es keine Hinweise. Neue Mitteilungen der Klasse erscheinen hier.</p>`;
   }
-  return `<div class="hinweis-list">${hinweise.map(renderHinweisStrip).join("")}</div>`;
+  const istAelter = istAeltererHinweis;
+  const aktuell = hinweise.filter((c) => !istAelter(c));
+  const aelter = hinweise.filter(istAelter);
+
+  let html = aktuell.length
+    ? `<div class="hinweis-list">${aktuell.map(renderHinweisStrip).join("")}</div>`
+    : `<p class="rubrik-panel-empty">In den letzten ${HINWEIS_AKTUELL_TAGE} Tagen gab es keine neuen Hinweise.</p>`;
+  if (aelter.length) {
+    html += `
+      <button type="button" class="btn link older-toggle" data-action="toggle-older-hinweise" aria-expanded="${showOlderHinweise}">
+        ${showOlderHinweise ? "Ältere Hinweise ausblenden" : `Ältere Hinweise anzeigen (${aelter.length})`}
+      </button>`;
+    if (showOlderHinweise) html += `<div class="hinweis-list">${aelter.map(renderHinweisStrip).join("")}</div>`;
+  }
+  return html;
 }
 
 // Zugeklappt: Titel, zwei Zeilen Vorschau, wie lange her. Aufgeklappt: die
@@ -1477,26 +1496,116 @@ function renderStundenplanStrip() {
 // ohne Admin-Rechte weiter (z. B. falls doch mal jemand ohne Absicht den
 // Hauptlink öffnet) — kein Zwang, sich einzuloggen, um die Pinnwand zu
 // lesen.
-async function maybeShowAdminLogin() {
-  if (classLocked || adminCode) return;
-  for (;;) {
-    const vals = await promptDlg("Admin-Zugang", [
-      { name: "code", label: "Admin-Passwort", type: "password", placeholder: "Passwort" },
-    ], "Nur für Lehrkraft/Elternsprecher — als Elternteil brauchst du das normalerweise nicht, einfach auf „Abbrechen” tippen.");
-    if (!vals) return;
-    let ok = false;
-    try {
-      ok = await rpc("verify_admin_code", { p_admin_code: vals.code });
-    } catch {
-      ok = false;
-    }
-    if (ok) {
-      adminCode = vals.code;
-      localStorage.setItem(ADMIN_CODE_KEY, adminCode);
-      return;
-    }
-    toast("Falsches Passwort.");
+//
+// Nutzerwunsch 20.09.2026: Statt der freiwilligen Admin-Abfrage gibt es jetzt
+// eine Anmeldung für alle (askLogin), ein Feld:
+//   - Klassenpasswort (Name der Klasse) -> fester Bereich dieser Klasse
+//   - Admin-Passwort                    -> Admin-Bereich mit beiden Klassen
+// Die Klassenpasswörter sind bewusst nur eine Ordnungshilfe, kein Schutz vor
+// Fremden (stehen im Klartext hier) — das Admin-Passwort dagegen prüft die
+// Datenbank (verify_admin_code).
+const KLASSEN_PASSWOERTER = {
+  eichhoernchen: ["eichhoernchen", "eichhoernchenklasse"],
+  schmetterling: ["schmetterlinge", "schmetterling", "schmetterlingsklasse"],
+};
+
+// Groß-/Kleinschreibung, Umlaute und Leerzeichen sollen keine Rolle spielen:
+// "Eichhörnchen", "eichhoernchen" und " EICHHÖRNCHEN " sind dasselbe.
+function normPw(s) {
+  return String(s || "").toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function isLoggedIn() { return classLocked || !!adminCode; }
+
+// Prüft ein eingegebenes Passwort und richtet das Gerät danach ein.
+// Gibt "klasse" oder "admin" zurück, bei falschem Passwort null.
+async function tryLogin(pw) {
+  const raw = String(pw || "").trim();
+  if (!raw) return null;
+  const n = normPw(raw);
+  const slug = Object.keys(KLASSEN_PASSWOERTER).find((s) => KLASSEN_PASSWOERTER[s].includes(n));
+  if (slug) {
+    const cls = classesList.find((c) => c.slug === slug);
+    if (!cls) throw new Error("Die Klasse konnte gerade nicht geladen werden. Bitte gleich noch einmal versuchen.");
+    activeClassId = cls.id;
+    classLocked = true;
+    adminCode = "";
+    localStorage.setItem(CLASS_KEY, cls.id);
+    localStorage.setItem(CLASS_LOCK_KEY, "1");
+    localStorage.setItem(CLASS_SLUG_KEY, slug);
+    localStorage.removeItem(ADMIN_CODE_KEY);
+    applyClassTheme(slug);
+    return "klasse";
   }
+  let ok = false;
+  try {
+    ok = await rpc("verify_admin_code", { p_admin_code: raw });
+  } catch {
+    throw new Error("Keine Verbindung — bitte gleich noch einmal versuchen.");
+  }
+  if (!ok) return null;
+  adminCode = raw;
+  classLocked = false;
+  activeClassId = "";
+  localStorage.setItem(ADMIN_CODE_KEY, raw);
+  localStorage.removeItem(CLASS_LOCK_KEY);
+  localStorage.removeItem(CLASS_SLUG_KEY);
+  localStorage.removeItem(CLASS_KEY);
+  applyClassTheme(null);
+  return "admin";
+}
+
+// Zeigt die Anmeldung und kehrt erst zurück, wenn sie geklappt hat.
+function askLogin() {
+  return new Promise((resolve) => {
+    const form = $("loginForm");
+    const input = $("loginInput");
+    const errEl = $("loginError");
+    const btn = $("loginSubmit");
+    input.value = "";
+    input.type = "password";
+    $("loginShow").checked = false;
+    errEl.hidden = true;
+
+    // Ohne Anmeldung gibt es keinen Inhalt: Esc schließt das Fenster nicht.
+    dlgLogin.addEventListener("cancel", (ev) => ev.preventDefault());
+    $("loginShow").addEventListener("change", (ev) => {
+      input.type = ev.target.checked ? "text" : "password";
+    });
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      errEl.hidden = true;
+      btn.disabled = true;
+      try {
+        const result = await tryLogin(input.value);
+        if (!result) {
+          errEl.textContent = "Das Passwort stimmt nicht. Tipp: Es ist der Name deiner Klasse.";
+          errEl.hidden = false;
+          input.select();
+          return;
+        }
+        dlgLogin.close();
+        resolve(result);
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.hidden = false;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    dlgLogin.showModal();
+    input.focus();
+  });
+}
+
+// "Abmelden": Gerät vergisst Klasse bzw. Admin-Rechte, danach erscheint
+// wieder die Anmeldung — z. B. für Familien mit Kindern in beiden Klassen
+// oder falls jemand versehentlich im falschen Bereich gelandet ist.
+function logout() {
+  for (const k of [CLASS_KEY, CLASS_LOCK_KEY, CLASS_SLUG_KEY, ADMIN_CODE_KEY]) localStorage.removeItem(k);
+  location.href = location.pathname;
 }
 
 // "Als Nächstes" auf der Startseite: der nächste Termin und was auf dieses
@@ -2171,7 +2280,19 @@ async function loadFeedbackEntries() {
   } catch (err) {
     feedbackEntries = { error: err.message || "Laden fehlgeschlagen." };
   }
+  if (Array.isArray(feedbackEntries)) setFeedbackBadge(feedbackEntries);
   if (view === "feedback") render();
+}
+
+function setFeedbackBadge(entries) {
+  if (!elFeedbackBadge) return;
+  const unread = isAdmin() ? entries.filter((f) => !f.read_at).length : 0;
+  elFeedbackBadge.textContent = String(unread);
+  elFeedbackBadge.hidden = unread === 0;
+  if (elFeedbackBtn) {
+    elFeedbackBtn.setAttribute("aria-label",
+      unread ? `Feedback, ${unread} ungelesen` : (isAdmin() ? "Feedback lesen" : "Feedback geben"));
+  }
 }
 
 // ideen-backlog.md #43 (Council-Feature-Idee): kleiner Zähler am
@@ -2185,9 +2306,7 @@ async function refreshFeedbackBadge() {
   }
   try {
     const entries = await rpc("list_feedback", {});
-    const unread = Array.isArray(entries) ? entries.filter((f) => !f.read_at).length : 0;
-    elFeedbackBadge.textContent = String(unread);
-    elFeedbackBadge.hidden = unread === 0;
+    setFeedbackBadge(Array.isArray(entries) ? entries : []);
   } catch {
     elFeedbackBadge.hidden = true;
   }
@@ -2698,6 +2817,7 @@ function openCardById(id) {
   } else {
     view = "feed";
     openHinweisId = id;
+    if (c.type === "hinweis" && istAeltererHinweis(c)) showOlderHinweise = true;
   }
   render();
   requestAnimationFrame(() => {
@@ -3875,6 +3995,11 @@ async function handleFeedClick(ev) {
       render();
       break;
     }
+    case "toggle-older-hinweise": {
+      showOlderHinweise = !showOlderHinweise;
+      render();
+      break;
+    }
     case "open-card": {
       openCardById(btn.dataset.card);
       break;
@@ -4312,27 +4437,9 @@ function updateOfflineBanner() {
   if (elOfflineBanner) elOfflineBanner.hidden = navigator.onLine;
 }
 
-/* ---------- Schriftgröße (Council-Feature-Idee #43) ---------- */
-// Barrierefreie Option ohne Systemzoom — eine CSS-Klasse auf <body>,
-// gemerkt per localStorage. Keine Datenbank-Änderung nötig.
-
-const FONT_SIZE_KEY = "pinnwand_grosse_schrift";
-
-function applyFontSizePref() {
-  document.body.classList.toggle("grosse-schrift", localStorage.getItem(FONT_SIZE_KEY) === "1");
-}
-
-function toggleFontSizePref() {
-  const isBig = localStorage.getItem(FONT_SIZE_KEY) === "1";
-  if (isBig) localStorage.removeItem(FONT_SIZE_KEY);
-  else localStorage.setItem(FONT_SIZE_KEY, "1");
-  applyFontSizePref();
-}
-
 /* ---------- Initialisierung ---------- */
 
 async function init() {
-  applyFontSizePref();
   updateOfflineBanner();
   window.addEventListener("online", updateOfflineBanner);
   window.addEventListener("offline", updateOfflineBanner);
@@ -4480,7 +4587,6 @@ async function init() {
       // nicht nur ungeschrieben-lassen (Nutzerwunsch 11.09.2026).
       if (elArchivBtn) elArchivBtn.hidden = !isAdmin();
       if (elPapierkorbBtn) elPapierkorbBtn.hidden = !isAdmin();
-      refreshFeedbackBadge();
       dlgMore.showModal();
     });
     dlgMore.addEventListener("click", (ev) => {
@@ -4496,6 +4602,15 @@ async function init() {
     });
   }
 
+  // Feedback-Kreis in der Kopfzeile (Nutzerwunsch 20.09.2026).
+  if (elFeedbackBtn) {
+    elFeedbackBtn.addEventListener("click", () => {
+      view = "feedback";
+      feedbackEntries = null; // immer frisch laden
+      render();
+    });
+  }
+
   if (dlgTranslate && $("moreTranslateBtn")) {
     $("moreTranslateBtn").addEventListener("click", () => {
       $("translateStandaloneNote").hidden = !isStandalone();
@@ -4503,16 +4618,6 @@ async function init() {
     });
     dlgTranslate.addEventListener("click", (ev) => {
       if (ev.target.closest("[data-close]")) dlgTranslate.close();
-    });
-  }
-
-  if (elFontSizeBtn) {
-    elFontSizeBtnLabel.textContent =
-      localStorage.getItem(FONT_SIZE_KEY) === "1" ? "Normale Schrift" : "Große Schrift";
-    elFontSizeBtn.addEventListener("click", () => {
-      toggleFontSizePref();
-      elFontSizeBtnLabel.textContent =
-        localStorage.getItem(FONT_SIZE_KEY) === "1" ? "Normale Schrift" : "Große Schrift";
     });
   }
 
@@ -4528,22 +4633,15 @@ async function init() {
     // Admin-Button für genau diesen ersten Besuch fälschlich sichtbar
     // gelassen. Stattdessen wie die anderen Mehr-Menü-Punkte bei jedem
     // Öffnen neu bestimmen (siehe elMoreBtn-Listener weiter unten).
+    // Nutzerwunsch 20.09.2026: Der Knopf ist jetzt für alle "Abmelden" —
+    // Klasse bzw. Admin-Zugang vergessen, danach erscheint die Anmeldung.
     if (elMoreBtn) {
       elMoreBtn.addEventListener("click", () => {
-        elAdminBtn.hidden = classLocked;
-        elAdminBtnLabel.textContent = isAdmin() ? "Admin-Zugang beenden" : "Admin-Zugang freischalten";
+        elAdminBtn.hidden = false;
+        elAdminBtnLabel.textContent = isAdmin() ? "Abmelden (Admin)" : "Abmelden / Klasse wechseln";
       });
     }
-    elAdminBtn.addEventListener("click", async () => {
-      if (isAdmin()) {
-        adminCode = "";
-        localStorage.removeItem(ADMIN_CODE_KEY);
-        render();
-      } else {
-        await maybeShowAdminLogin();
-        render();
-      }
-    });
+    elAdminBtn.addEventListener("click", () => logout());
   }
 
   // Verwaltung Kalender/Stundenplan (nur Hauptlink) — Inhalt wechselt
@@ -4587,23 +4685,26 @@ async function init() {
   }
 
   await loadClasses();
-  // applyClassLink() (in loadClasses()) kann classLocked erst hier ändern
-  // (erster Besuch über einen Klassen-Link) — adminCode oben wurde vor
-  // diesem Zeitpunkt mit dem alten classLocked-Wert berechnet, deshalb
-  // hier neu bestimmen, bevor irgendetwas admin-Abhängiges gerendert wird.
   adminCode = classLocked ? "" : (localStorage.getItem(ADMIN_CODE_KEY) || "");
-  // Design-Review 18.09.2026: keine automatische Passwortabfrage mehr beim
-  // Öffnen — nichts soll vor dem Inhalt stehen. Lehrkraft/Elternsprecher
-  // melden sich einmal pro Gerät über "Mehr" → "Admin-Zugang freischalten"
-  // an (maybeShowAdminLogin, weiterhin von dort aufgerufen).
+  // Nutzerwunsch 20.09.2026: Ohne Anmeldung kein Inhalt. Geräte, die schon
+  // auf eine Klasse festgelegt sind oder Admin-Rechte haben, bleiben
+  // angemeldet und sehen die Anmeldung nie. Alle anderen (z. B. wer den
+  // Hauptlink bekommen hat) melden sich einmal an und landen in ihrem Bereich.
+  if (!isLoggedIn()) {
+    await askLogin();
+    renderClassSelect();
+    syncClassInUrl();
+    render();
+  }
   beginVisit();
   reload();
+  refreshFeedbackBadge();
 
   // Alle 60 s still aktualisieren (nur wenn sichtbar und kein Dialog offen)
   setInterval(() => {
     if (document.visibilityState !== "visible") return;
     rememberVisitEnd();
-    if (!anyDialogOpen() && pollEditing.size === 0) reload({ silent: true });
+    if (!anyDialogOpen() && pollEditing.size === 0) { reload({ silent: true }); refreshFeedbackBadge(); }
   }, 60000);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {

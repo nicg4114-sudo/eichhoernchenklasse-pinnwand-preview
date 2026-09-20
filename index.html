@@ -27,6 +27,12 @@
         <button id="searchBtn" class="icon-btn-round" type="button" title="Suchen" aria-label="Suchen">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8.7" cy="8.7" r="5.7"/><line x1="16.5" y1="16.5" x2="12.8" y2="12.8"/></svg>
         </button>
+        <!-- Feedback (Nutzerwunsch 20.09.2026): sitzt jetzt in der Kopfzeile statt im
+             Mehr-Menü. Admins sehen hier die Zahl ungelesener Nachrichten. -->
+        <button id="feedbackBtn" class="icon-btn-round" type="button" title="Feedback geben" aria-label="Feedback geben">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h13v8h-6.5L6 16.5v-3h-2.5z"/></svg>
+          <span id="feedbackBadge" class="icon-badge" hidden></span>
+        </button>
         <button id="fab" class="fab" title="Neuen Eintrag erstellen" aria-label="Neuen Eintrag erstellen">+</button>
         <button id="pushBell" class="push-bell" type="button" title="Benachrichtigungen aktivieren" aria-label="Benachrichtigungen aktivieren" hidden></button>
       </div>
@@ -105,20 +111,6 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.25"/><path d="M6.6 10.2l2.2 2.2 4.6-4.8"/></svg>
       Version — was ist neu?
     </button>
-    <!-- Nutzerwunsch 12.09.2026: eine Rubrik für alle statt zwei getrennter
-         Menüpunkte — Inhalt (Sende-Formular oder Admin-Liste mit Kommentar)
-         wird je nach isAdmin() in renderFeedbackView() unterschieden. -->
-    <button class="more-item" data-view="feedback" data-close>
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h13v8h-6.5L6 16.5v-3h-2.5z"/></svg>
-      Feedback
-      <span id="moreFeedbackBadge" class="more-item-badge" hidden></span>
-    </button>
-    <!-- ideen-backlog.md #43 (Council-Feature-Idee): rein clientseitig,
-         keine Datenbank-Änderung. -->
-    <button class="more-item" id="moreFontSizeBtn" type="button" data-close>
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15.5L8 5h1l4 10.5"/><path d="M5.2 12.5h6.6"/><path d="M13.5 15.5l2.7-6.5h.6l2.7 6.5"/></svg>
-      <span id="moreFontSizeBtnLabel">Große Schrift</span>
-    </button>
     <!-- UX-Forschung 19.09.2026: Übersetzung über die eingebaute Funktion des
          Browsers (kostenlos, ohne Weitergabe an einen weiteren Dienst) —
          zweisprachig beschriftet, damit man den Punkt auch ohne
@@ -127,8 +119,8 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.25"/><path d="M2.9 10h14.2"/><path d="M10 2.75c2 2 3 4.5 3 7.25s-1 5.25-3 7.25c-2-2-3-4.5-3-7.25s1-5.25 3-7.25z"/></svg>
       <span>Sprache · Language</span>
     </button>
-    <!-- ideen-backlog.md #19: nur am Hauptlink sichtbar (per JS ausgeblendet
-         bei Klassen-Link), Beschriftung/Wirkung je nach Admin-Status per JS. -->
+    <!-- Abmelden (Nutzerwunsch 20.09.2026): für alle sichtbar, Beschriftung per JS.
+         Vergisst Klasse bzw. Admin-Zugang, danach erscheint die Anmeldung. -->
     <button class="more-item" id="moreAdminBtn" type="button" data-close>
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5"/><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9"/></svg>
       <span id="moreAdminBtnLabel">Admin-Zugang</span>
@@ -190,6 +182,26 @@
     <div class="dlg-actions">
       <button type="button" class="btn ghost" data-close>Abbrechen</button>
       <button type="submit" class="btn primary">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Anmeldung (Nutzerwunsch 20.09.2026): ein Feld. Klassenpasswort führt in die
+     jeweilige Klasse, Admin-Passwort in den Admin-Bereich mit beiden Klassen.
+     Lässt sich nicht wegklicken — ohne Anmeldung gibt es keinen Inhalt. -->
+<dialog id="dlgLogin" class="dlg small dlg-login">
+  <form id="loginForm" novalidate>
+    <h2>Willkommen auf der Pinnwand</h2>
+    <p class="rubrik-panel-hint">Bitte einmal anmelden. Als Passwort gibst du den Namen deiner Klasse ein — dann landest du direkt in deinem Bereich.</p>
+    <label class="field">
+      <span>Passwort</span>
+      <input id="loginInput" type="password" name="pw" autocomplete="off" autocapitalize="none"
+             autocorrect="off" spellcheck="false" maxlength="100" placeholder="z. B. Eichhörnchen" required>
+    </label>
+    <label class="check-row"><input type="checkbox" id="loginShow"> Passwort anzeigen</label>
+    <p id="loginError" class="form-error" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <button type="submit" class="btn primary" id="loginSubmit">Anmelden</button>
     </div>
   </form>
 </dialog>

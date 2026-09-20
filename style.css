@@ -116,7 +116,12 @@ html { -webkit-text-size-adjust: 100%; }
    den (dann zu breiten) Viewport bezieht. html/body als Absicherung auf die
    Bildschirmbreite begrenzt, zusätzlich lange Wörter global umbrechbar
    gemacht statt die Breite zu sprengen. */
-html, body { overflow-x: hidden; max-width: 100%; }
+/* Nutzerwunsch 20.09.2026: Kopfzeile bleibt oben stehen. "overflow-x: hidden"
+   auf html UND body macht den body zum eigenen Scroll-Bereich — dann klebt
+   "position: sticky" nirgends mehr. Deshalb nur html clippt hart, body
+   schneidet mit "clip" ab, ohne selbst zu scrollen. */
+html { overflow-x: hidden; max-width: 100%; }
+body { overflow-x: clip; max-width: 100%; }
 
 body {
   margin: 0;
@@ -131,18 +136,15 @@ body {
 
 button { font: inherit; color: inherit; }
 
-/* ideen-backlog.md #43 (Council-Feature-Idee): "Große Schrift"-Umschalter im
-   Mehr-Menü, gemerkt per localStorage — da fast alle Größen im rem gesetzt
-   sind, skaliert eine höhere Basis-Schriftgröße die ganze App mit. */
-body.grosse-schrift { font-size: 19px; }
 
 h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01em; }
 
 /* ---------- Kopfzeile ---------- */
 
+/* Undurchsichtig, damit der Inhalt beim Scrollen wirklich dahinter
+   verschwindet statt durchzuschimmern. */
 .topbar {
-  background: rgba(255, 255, 255, .92);
-  backdrop-filter: saturate(160%) blur(8px);
+  background: #fff;
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
@@ -160,8 +162,14 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
   gap: 8px;
 }
 
+/* Einzeilig: bei Admins stehen drei Kreise rechts, der Titel darf nicht
+   umbrechen, sondern wird im Notfall gekürzt. */
 .topbar h1 {
   margin: 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 1.28rem;
   font-weight: 800;
   letter-spacing: -.02em;
@@ -258,7 +266,25 @@ h1, h2, h3 { font-family: "Figtree", system-ui, sans-serif; letter-spacing: -.01
   cursor: pointer;
   transition: background .15s ease, color .15s ease;
 }
+.icon-btn-round { position: relative; }
 .icon-btn-round svg { width: 17px; height: 17px; }
+/* Zähler am Feedback-Kreis (nur Admins, nur wenn Ungelesenes vorliegt). */
+.icon-badge:not([hidden]) {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--important);
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px #fff;
+}
 .icon-btn-round:hover { color: var(--ink); background: var(--line-soft); }
 
 .search-input {
@@ -804,6 +830,8 @@ span.aufgabe-check { cursor: default; }
    der installierten App geht (siehe init). */
 .push-bell.unavailable { opacity: .55; }
 
+/* "Ältere Hinweise anzeigen (n)" unter der Hinweis-Liste. */
+.older-toggle { align-self: flex-start; margin-top: -8px; }
 
 /* Kurze, ruhige Bestätigung beim Erledigen (siehe celebrate in app.js). */
 @keyframes justDone {
@@ -2110,7 +2138,7 @@ span.aufgabe-check { cursor: default; }
   margin-bottom: 5px;
   color: var(--muted);
 }
-.field input[type="text"], .field input[type="date"], .field input[type="time"],
+.field input[type="text"], .field input[type="password"], .field input[type="date"], .field input[type="time"],
 .field textarea, .field select {
   width: 100%;
   border: 1px solid var(--line);
@@ -2356,4 +2384,8 @@ span.aufgabe-check { cursor: default; }
   .card { padding: 13px 14px 11px; }
   .items.abhaken li { grid-template-columns: 1fr 96px; }
   .group-label { font-size: .95rem; }
+}
+
+@media (max-width: 420px) {
+  .topbar h1 { font-size: 1.1rem; }
 }
