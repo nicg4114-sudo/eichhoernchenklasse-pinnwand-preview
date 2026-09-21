@@ -74,6 +74,7 @@ const VERSIONS = [
       "Bei wiederkehrenden Terminen gibt es ebenfalls eine Endzeit. Ein Tipp auf den Kalendertag zeigt jetzt auch die Uhrzeit.",
       "Angepinnte Termine (auch wiederkehrende) stehen auf der Startseite unter dem Stundenplan, je Termin in einer Zeile.",
       "Fehler im Kalender behoben: Bei manchen Monaten fehlten die letzten Tage (z. B. 28.–30. September).",
+      "Das ⋯-Menü an Karten öffnet sich jetzt immer vollständig im sichtbaren Bereich (vorher ragte es bei manchen Einträgen am Handy über den linken Rand hinaus).",
       "Wiederkehrende Ereignisse und Ferien stehen jetzt als eigene Zeilen unter dem Kalender. Admins können sie dort bearbeiten, anpinnen (wiederkehrende) und löschen. Außerdem behoben: Ferien ließen sich in der App nicht speichern.",
       "Karten verknüpfen: Jede Karte (Termin, Umfrage, Liste, Tabelle, Hinweis, Datei) lässt sich mit einer anderen verbinden — über „Verknüpfen …“ im Menü der Karte oder schon beim Anlegen. Verknüpfte Karten erscheinen unten als „Verknüpft mit …“ und lassen sich antippen.",
       "Neue Symbole: Jede Klasse hat ihr Tier (Eichhörnchen, Schmetterling), auf dem Startbildschirm und in Benachrichtigungen. Auf dem iPhone erscheint das neue Symbol, wenn die App einmal vom Startbildschirm gelöscht und neu hinzugefügt wird.",
@@ -4218,6 +4219,28 @@ async function submitEditor() {
 
 /* ---------- Aktionen aus dem Feed ---------- */
 
+// Schiebt das geöffnete Menü in den sichtbaren Bereich (siehe toggle-Handler).
+const MENU_RAND = 8;
+function placeMenu(d) {
+  const list = d.querySelector(".menu-list");
+  if (!list) return;
+  list.style.right = "";
+  list.style.top = "";
+  list.style.maxHeight = `${window.innerHeight - 2 * MENU_RAND}px`;
+  list.style.overflowY = "auto";
+  const r = list.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth;
+  let dx = 0;
+  if (r.left < MENU_RAND) dx = MENU_RAND - r.left;
+  else if (r.right > vw - MENU_RAND) dx = (vw - MENU_RAND) - r.right;
+  if (dx) list.style.right = `${-dx}px`;
+  const platzUnten = window.innerHeight - r.bottom;
+  const s = d.querySelector("summary").getBoundingClientRect();
+  if (platzUnten < MENU_RAND && s.top - r.height - 4 >= MENU_RAND) {
+    list.style.top = `${-(r.height + 4)}px`;
+  }
+}
+
 function cardById(id) {
   return cards.find((c) => c.id === id);
 }
@@ -5012,6 +5035,19 @@ async function init() {
   elFeed.addEventListener("change", handleFeedChange);
   elNotice.addEventListener("click", (ev) => {
     if (ev.target.closest('[data-action="retry"]')) reload();
+  });
+
+  // Nutzerwunsch 21.09.2026: Das Aktionsmenü muss immer komplett im Bild
+  // stehen. Bei Kurznachrichten und Kalenderzeilen sitzen die drei Punkte weit
+  // links, das nach links aufgehende Menü ragte über den Bildschirmrand.
+  // Beim Öffnen wird es deshalb in den sichtbaren Bereich geschoben (und bei
+  // Platzmangel unten nach oben geklappt).
+  document.addEventListener("toggle", (ev) => {
+    const d = ev.target;
+    if (d instanceof HTMLElement && d.matches("details.menu") && d.open) placeMenu(d);
+  }, true);
+  window.addEventListener("resize", () => {
+    document.querySelectorAll("details.menu[open]").forEach(placeMenu);
   });
 
   // Offene ⋯-Menüs schließen, wenn daneben geklickt wird

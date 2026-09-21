@@ -2319,8 +2319,10 @@ span.aufgabe-check { cursor: default; }
 .cal-extra-pin svg { width: 14px; height: 14px; display: block; }
 .cal-extra-menu { flex: 0 0 auto; }
 @media (max-width: 420px) {
+  /* Menü bleibt rechts in der ersten Zeile, die Uhrzeit rutscht darunter */
   .cal-extra-row { flex-wrap: wrap; }
-  .cal-extra-zeit { flex-basis: 100%; padding-left: calc(5.6em + 8px); }
+  .cal-extra-menu { order: 1; margin-left: auto; }
+  .cal-extra-zeit { order: 2; flex-basis: 100%; padding-left: calc(5.6em + 8px); }
 }
 
 /* Allgemeine Verknüpfungen (Migration 033) */
