@@ -189,6 +189,13 @@ let activeClassId = localStorage.getItem(CLASS_KEY) || "";
 // Datenbankschutz. Wer den Link ohne "?klasse=" öffnet (z. B. Geschwister
 // in beiden Klassen, oder die Lehrkraft), behält die volle Auswahl.
 const CLASS_LOCK_KEY = "pinnwand_klasse_gesperrt";
+// Schalter "Anmeldung für alle" (Nutzerwunsch 21.09.2026, migration-029): liegt
+// in der Datenbank, damit er ohne neue Veröffentlichung umgelegt werden kann.
+// AUS (Standard) = Verhalten wie die bisherige Live-Version (Klassen-Link
+// sperrt das Gerät, Admin-Zugang freiwillig über "Mehr"). AN = Anmeldefenster.
+// Der zuletzt bekannte Wert wird gemerkt, falls der Abruf mal scheitert.
+const LOGIN_PFLICHT_KEY = "pinnwand_login_pflicht";
+let loginPflicht = localStorage.getItem(LOGIN_PFLICHT_KEY) === "1";
 let classLocked = localStorage.getItem(CLASS_LOCK_KEY) === "1";
 // Merkt sich, über welchen Klassen-Link gesperrt wurde, damit das
 // zartblaue Schmetterlings-Design (siehe applyClassTheme) schon beim
@@ -701,6 +708,16 @@ async function fetchSchoolHolidays() {
   return res.json();
 }
 
+async function refreshLoginPflicht() {
+  try {
+    loginPflicht = (await rpc("get_login_pflicht")) === true;
+    localStorage.setItem(LOGIN_PFLICHT_KEY, loginPflicht ? "1" : "0");
+  } catch {
+    // Funktion fehlt (Migration 029 nicht eingespielt) oder offline:
+    // beim zuletzt bekannten Wert bleiben, sonst AUS.
+  }
+}
+
 async function loadClasses() {
   try {
     classesList = await fetchClasses();
@@ -726,7 +743,26 @@ async function loadClasses() {
 // jeder mit seinem Passwort in seinem Bereich, egal welchen Link er hat, und
 // ein weitergeleiteter Link stellt keine Klasse um. Der Link bringt nur noch
 // das Klassen-Symbol/-Manifest mit (syncClassInUrl), sobald angemeldet.
+//
+// Nutzerwunsch 21.09.2026: Nur bei eingeschalteter Anmeldung (loginPflicht).
+// Solange der Schalter AUS ist, gilt das frühere Verhalten: Ein Klassen-Link
+// sperrt das Gerät auf die Klasse (ein weitergeleiteter Karten-Link einer
+// anderen Klasse stellt eine schon festgelegte Klasse nicht um).
 function applyClassLink() {
+  const slug = new URLSearchParams(location.search).get("klasse");
+  if (!loginPflicht && slug) {
+    const cls = classesList.find((c) => c.slug === slug);
+    const lockedSlug = classLocked ? localStorage.getItem(CLASS_SLUG_KEY) : null;
+    const fremderTeilenLink = location.hash.startsWith("#karte-") && lockedSlug && lockedSlug !== slug;
+    if (cls && !fremderTeilenLink) {
+      activeClassId = cls.id;
+      classLocked = true;
+      localStorage.setItem(CLASS_KEY, activeClassId);
+      localStorage.setItem(CLASS_LOCK_KEY, "1");
+      localStorage.setItem(CLASS_SLUG_KEY, slug);
+      applyClassTheme(slug);
+    }
+  }
   syncClassInUrl();
 }
 
@@ -804,7 +840,7 @@ const ADMIN_CODE_RPCS = new Set([
   "delete_folder", "set_schedule", "create_recurring_event",
   "update_recurring_event", "delete_recurring_event", "set_school_holidays",
   "add_poll_option", "update_poll_option", "delete_poll_option",
-  "list_feedback", "comment_feedback", "delete_feedback",
+  "list_feedback", "comment_feedback", "delete_feedback", "set_login_pflicht",
 ]);
 
 async function rpc(name, args = {}) {
@@ -1557,44 +1593,64 @@ async function tryLogin(pw) {
   return "admin";
 }
 
-// Zeigt die Anmeldung und kehrt erst zurück, wenn sie geklappt hat.
-function askLogin() {
+// Zeigt die Anmeldung. optional = false: nicht wegklickbar, kehrt erst zurück,
+// wenn sie geklappt hat (Anmeldung AN). optional = true: mit "Abbrechen"
+// (Admin-Zugang bei ausgeschalteter Anmeldung), Ergebnis dann null.
+let loginResolve = null;
+let loginOptional = false;
+let loginWired = false;
+
+function wireLogin() {
+  if (loginWired) return;
+  loginWired = true;
+  const input = $("loginInput");
+  const errEl = $("loginError");
+  const btn = $("loginSubmit");
+  // Ohne Anmeldung gibt es keinen Inhalt: Esc schließt nur den freiwilligen Dialog.
+  dlgLogin.addEventListener("cancel", (ev) => { if (!loginOptional) ev.preventDefault(); });
+  dlgLogin.addEventListener("close", () => {
+    const r = loginResolve; loginResolve = null;
+    if (r) r(null);
+  });
+  $("loginCancel").addEventListener("click", () => dlgLogin.close());
+  $("loginShow").addEventListener("change", (ev) => {
+    input.type = ev.target.checked ? "text" : "password";
+  });
+  $("loginForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    errEl.hidden = true;
+    btn.disabled = true;
+    try {
+      const result = await tryLogin(input.value);
+      if (!result) {
+        errEl.textContent = "Das Passwort stimmt nicht. Tipp: Es ist der Name deiner Klasse.";
+        errEl.hidden = false;
+        input.select();
+        return;
+      }
+      const r = loginResolve; loginResolve = null;
+      dlgLogin.close();
+      if (r) r(result);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+function askLogin(optional = false) {
+  wireLogin();
   return new Promise((resolve) => {
-    const form = $("loginForm");
+    loginResolve = resolve;
+    loginOptional = optional;
     const input = $("loginInput");
-    const errEl = $("loginError");
-    const btn = $("loginSubmit");
     input.value = "";
     input.type = "password";
     $("loginShow").checked = false;
-    errEl.hidden = true;
-
-    // Ohne Anmeldung gibt es keinen Inhalt: Esc schließt das Fenster nicht.
-    dlgLogin.addEventListener("cancel", (ev) => ev.preventDefault());
-    $("loginShow").addEventListener("change", (ev) => {
-      input.type = ev.target.checked ? "text" : "password";
-    });
-    form.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      errEl.hidden = true;
-      btn.disabled = true;
-      try {
-        const result = await tryLogin(input.value);
-        if (!result) {
-          errEl.textContent = "Das Passwort stimmt nicht. Tipp: Es ist der Name deiner Klasse.";
-          errEl.hidden = false;
-          input.select();
-          return;
-        }
-        dlgLogin.close();
-        resolve(result);
-      } catch (err) {
-        errEl.textContent = err.message;
-        errEl.hidden = false;
-      } finally {
-        btn.disabled = false;
-      }
-    });
+    $("loginError").hidden = true;
+    $("loginCancel").hidden = !optional;
     dlgLogin.showModal();
     input.focus();
   });
@@ -4635,13 +4691,61 @@ async function init() {
     // Öffnen neu bestimmen (siehe elMoreBtn-Listener weiter unten).
     // Nutzerwunsch 20.09.2026: Der Knopf ist jetzt für alle "Abmelden" —
     // Klasse bzw. Admin-Zugang vergessen, danach erscheint die Anmeldung.
+    // Anmeldung AN: "Abmelden". AUS: wie früher "Admin-Zugang freischalten/
+    // beenden" (auf einem Klassen-Link-Gerät unsichtbar). Der Schalter selbst
+    // ist nur für angemeldete Admins sichtbar.
+    const elSwitchBtn = $("moreLoginSwitchBtn");
+    const elSwitchLabel = $("moreLoginSwitchLabel");
     if (elMoreBtn) {
       elMoreBtn.addEventListener("click", () => {
-        elAdminBtn.hidden = false;
-        elAdminBtnLabel.textContent = isAdmin() ? "Abmelden (Admin)" : "Abmelden / Klasse wechseln";
+        if (loginPflicht) {
+          elAdminBtn.hidden = false;
+          elAdminBtnLabel.textContent = isAdmin() ? "Abmelden (Admin)" : "Abmelden / Klasse wechseln";
+        } else {
+          elAdminBtn.hidden = classLocked;
+          elAdminBtnLabel.textContent = isAdmin() ? "Admin-Zugang beenden" : "Admin-Zugang freischalten";
+        }
+        if (elSwitchBtn) {
+          elSwitchBtn.hidden = !isAdmin();
+          elSwitchLabel.textContent = loginPflicht
+            ? "Anmeldung für alle: AN — ausschalten"
+            : "Anmeldung für alle: AUS — einschalten";
+        }
       });
     }
-    elAdminBtn.addEventListener("click", () => logout());
+    elAdminBtn.addEventListener("click", async () => {
+      if (loginPflicht) { logout(); return; }
+      if (isAdmin()) {
+        adminCode = "";
+        localStorage.removeItem(ADMIN_CODE_KEY);
+        render();
+        return;
+      }
+      if (await askLogin(true)) {
+        renderClassSelect();
+        syncClassInUrl();
+        render();
+        reload();
+      }
+    });
+    if (elSwitchBtn) {
+      elSwitchBtn.addEventListener("click", async () => {
+        const an = !loginPflicht;
+        const ok = await confirmDlg(an
+          ? "Anmeldung für alle EINSCHALTEN? Ab dem nächsten Öffnen der App müssen sich alle, die noch keiner Klasse zugeordnet sind, mit dem Namen ihrer Klasse anmelden."
+          : "Anmeldung für alle AUSSCHALTEN? Danach kommt jeder wieder ohne Passwort hinein.",
+          an ? "Einschalten" : "Ausschalten");
+        if (!ok) return;
+        try {
+          await rpc("set_login_pflicht", { p_on: an });
+          loginPflicht = an;
+          localStorage.setItem(LOGIN_PFLICHT_KEY, an ? "1" : "0");
+          toast(an ? "Anmeldung ist jetzt eingeschaltet." : "Anmeldung ist jetzt ausgeschaltet.");
+        } catch (err) {
+          toast(err.message || "Umschalten fehlgeschlagen.", true);
+        }
+      });
+    }
   }
 
   // Verwaltung Kalender/Stundenplan (nur Hauptlink) — Inhalt wechselt
@@ -4684,13 +4788,15 @@ async function init() {
     return;
   }
 
+  await refreshLoginPflicht();
   await loadClasses();
   adminCode = classLocked ? "" : (localStorage.getItem(ADMIN_CODE_KEY) || "");
-  // Nutzerwunsch 20.09.2026: Ohne Anmeldung kein Inhalt. Geräte, die schon
+  // Nutzerwunsch 20.09.2026 (Schalter 21.09.2026): Bei eingeschalteter
+  // Anmeldung kein Inhalt ohne Anmeldung. Geräte, die schon
   // auf eine Klasse festgelegt sind oder Admin-Rechte haben, bleiben
   // angemeldet und sehen die Anmeldung nie. Alle anderen (z. B. wer den
   // Hauptlink bekommen hat) melden sich einmal an und landen in ihrem Bereich.
-  if (!isLoggedIn()) {
+  if (loginPflicht && !isLoggedIn()) {
     await askLogin();
     renderClassSelect();
     syncClassInUrl();

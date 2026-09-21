@@ -125,6 +125,11 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5"/><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9"/></svg>
       <span id="moreAdminBtnLabel">Admin-Zugang</span>
     </button>
+    <!-- Schalter "Anmeldung für alle" (migration-029) — nur für angemeldete Admins. -->
+    <button class="more-item" id="moreLoginSwitchBtn" type="button" data-close hidden>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="15" height="7" rx="3.5"/><circle cx="13.5" cy="10" r="2" fill="currentColor" stroke="none"/></svg>
+      <span id="moreLoginSwitchLabel">Anmeldung für alle</span>
+    </button>
   </div>
   <div class="dlg-actions">
     <button type="button" class="btn ghost" data-close>Schließen</button>
@@ -201,6 +206,7 @@
     <label class="check-row"><input type="checkbox" id="loginShow"> Passwort anzeigen</label>
     <p id="loginError" class="form-error" role="alert" hidden></p>
     <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="loginCancel" hidden>Abbrechen</button>
       <button type="submit" class="btn primary" id="loginSubmit">Anmelden</button>
     </div>
   </form>
