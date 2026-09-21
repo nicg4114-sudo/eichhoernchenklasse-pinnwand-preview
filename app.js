@@ -74,6 +74,7 @@ const VERSIONS = [
       "Bei wiederkehrenden Terminen gibt es ebenfalls eine Endzeit. Ein Tipp auf den Kalendertag zeigt jetzt auch die Uhrzeit.",
       "Angepinnte Termine (auch wiederkehrende) stehen auf der Startseite unter dem Stundenplan, je Termin in einer Zeile.",
       "Fehler im Kalender behoben: Bei manchen Monaten fehlten die letzten Tage (z. B. 28.–30. September).",
+      "Wiederkehrende Ereignisse und Ferien stehen jetzt als eigene Zeilen unter dem Kalender. Admins können sie dort bearbeiten, anpinnen (wiederkehrende) und löschen. Außerdem behoben: Ferien ließen sich in der App nicht speichern.",
       "Karten verknüpfen: Jede Karte (Termin, Umfrage, Liste, Tabelle, Hinweis, Datei) lässt sich mit einer anderen verbinden — über „Verknüpfen …“ im Menü der Karte oder schon beim Anlegen. Verknüpfte Karten erscheinen unten als „Verknüpft mit …“ und lassen sich antippen.",
       "Neue Symbole: Jede Klasse hat ihr Tier (Eichhörnchen, Schmetterling), auf dem Startbildschirm und in Benachrichtigungen. Auf dem iPhone erscheint das neue Symbol, wenn die App einmal vom Startbildschirm gelöscht und neu hinzugefügt wird.",
     ],
@@ -2344,10 +2345,144 @@ function renderMonatsTermine(termine) {
     .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date))
       || String(a.event_time || "").localeCompare(String(b.event_time || "")));
 
+  const extras = renderMonatsExtras();
   if (!monthTermine.length) {
-    return `<p class="rubrik-panel-empty">Keine Termine in diesem Monat.</p>`;
+    return `<p class="rubrik-panel-empty">Keine Termine in diesem Monat.</p>${extras}`;
   }
-  return `<div id="calMonthTermine">${monthTermine.map(renderTerminStrip).join("")}</div>`;
+  return `<div id="calMonthTermine">${monthTermine.map(renderTerminStrip).join("")}</div>${extras}`;
+}
+
+// Nutzerwunsch 21.09.2026: Wiederkehrende Ereignisse und Ferien/freie Tage
+// standen bisher nur als Markierung im Kalender — als eigene Zeile fehlten
+// sie, also ließen sie sich nachträglich nicht bearbeiten oder anpinnen.
+// Jetzt je Eintrag eine schmale Zeile unter den Terminen des Monats.
+// Wiederkehrende nur, wenn sie in diesem Monat wenigstens einmal wirklich
+// stattfinden (nicht komplett in den Ferien).
+function fmtDatumBereich(start, end) {
+  const a = parseISODate(start), b = parseISODate(end);
+  if (start === end) return `${a.getDate()}. ${MONAT_KURZ[a.getMonth()]}`;
+  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) {
+    return `${a.getDate()}.–${b.getDate()}. ${MONAT_KURZ[a.getMonth()]}`;
+  }
+  return `${a.getDate()}. ${MONAT_KURZ[a.getMonth()]} – ${b.getDate()}. ${MONAT_KURZ[b.getMonth()]}`;
+}
+
+function renderMonatsExtras() {
+  const y = calendarMonth.getFullYear(), m = calendarMonth.getMonth();
+  const tageImMonat = new Date(y, m + 1, 0).getDate();
+  const iso = (tag) => `${y}-${pad2(m + 1)}-${pad2(tag)}`;
+  const ersterTag = iso(1), letzterTag = iso(tageImMonat);
+
+  const findetStatt = (r) => {
+    for (let t = 1; t <= tageImMonat; t++) {
+      if (isoWeekday(new Date(y, m, t)) === r.weekday && !holidayForDate(iso(t))) return true;
+    }
+    return false;
+  };
+  const wiederkehrend = recurringEvents
+    .filter((r) => inActiveClassGeneric(r.class_id) && findetStatt(r))
+    .sort((a, b) => a.weekday - b.weekday || String(a.start_time || "").localeCompare(String(b.start_time || "")));
+  const ferien = schoolHolidays
+    .filter((h) => h.start_date <= letzterTag && h.end_date >= ersterTag)
+    .sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
+  if (!wiederkehrend.length && !ferien.length) return "";
+
+  const menu = (items) => !isAdmin() ? "" : `
+    <details class="menu cal-extra-menu">
+      <summary title="Aktionen">${ICONS.menu}</summary>
+      <div class="menu-list">${items}</div>
+    </details>`;
+
+  const zeilenW = wiederkehrend.map((r) => {
+    const klasse = r.class_id ? (CLASS_ICON[classesList.find((c) => c.id === r.class_id)?.slug] || "") : "";
+    const zeit = r.start_time ? fmtTimeRange(r.start_time, r.end_time).replace(/ Uhr$/, "") : "";
+    return `
+      <div class="cal-extra-row ${r.pinned ? "is-pinned" : ""}">
+        <span class="cal-extra-tag">Jeden ${WEEKDAY_SHORT[r.weekday]}</span>
+        <span class="cal-extra-title">${esc(r.title)}${klasse ? ` <span class="who">${klasse}</span>` : ""}</span>
+        <span class="cal-extra-zeit">${esc(zeit)}</span>
+        ${r.pinned ? `<span class="cal-extra-pin" title="Auf der Startseite angepinnt" aria-label="Auf der Startseite angepinnt">${ICONS.pin}</span>` : ""}
+        ${menu(`
+          <button data-action="recurring-edit-row" data-id="${r.id}">Bearbeiten</button>
+          <button data-action="recurring-pin-row" data-id="${r.id}" data-pinned="${r.pinned ? "1" : "0"}">${r.pinned ? "Nicht mehr anpinnen" : "Auf der Startseite anpinnen"}</button>
+          <button class="danger" data-action="recurring-delete-row" data-id="${r.id}">Löschen</button>`)}
+      </div>`;
+  }).join("");
+
+  const zeilenF = ferien.map((h) => `
+      <div class="cal-extra-row">
+        <span class="cal-extra-tag">${esc(fmtDatumBereich(h.start_date, h.end_date))}</span>
+        <span class="cal-extra-title">${esc(h.label)}</span>
+        <span class="cal-extra-zeit">kein Unterricht</span>
+        ${menu(`
+          <button data-action="holiday-edit-row" data-id="${h.id}">Bearbeiten</button>
+          <button class="danger" data-action="holiday-delete-row" data-id="${h.id}">Löschen</button>`)}
+      </div>`).join("");
+
+  return `<div class="cal-extras">
+    ${zeilenW ? `<h3 class="cal-extra-label">Wiederkehrend</h3>${zeilenW}` : ""}
+    ${zeilenF ? `<h3 class="cal-extra-label">Ferien &amp; freie Tage</h3>${zeilenF}` : ""}
+  </div>`;
+}
+
+// Bearbeiten eines wiederkehrenden Ereignisses / eines Ferienblocks — von der
+// Zeile in der Monatsübersicht und aus der Verwaltungsliste genutzt.
+// Liefert true, wenn gespeichert wurde.
+async function editRecurring(id) {
+  const r = recurringEvents.find((x) => x.id === id);
+  if (!r) return false;
+  const vals = await promptDlg("Wiederkehrendes Ereignis bearbeiten", [
+    { name: "title", label: "Titel", value: r.title, maxlength: 120 },
+    { name: "weekday", label: "Wochentag", value: String(r.weekday), options: WOCHENTAG_OPTIONS },
+    { name: "start_time", label: "Uhrzeit von (optional)", type: "time", optional: true,
+      value: r.start_time ? r.start_time.slice(0, 5) : "" },
+    { name: "end_time", label: "Uhrzeit bis (optional)", type: "time", optional: true,
+      value: r.end_time ? r.end_time.slice(0, 5) : "" },
+    { name: "class_id", label: "Gilt für", value: r.class_id || "",
+      options: [{ value: "", label: "Beide Klassen" }].concat(
+        classesList.map((cl) => ({ value: cl.id, label: `${CLASS_ICON[cl.slug] || ""} ${cl.name}` }))) },
+  ]);
+  if (!vals) return false;
+  const start = vals.start_time || null;
+  const end = start ? (vals.end_time || null) : null;
+  if (end && end <= start) { toast("Die Endzeit muss nach der Startzeit liegen.", true); return false; }
+  try {
+    await rpc("update_recurring_event", {
+      p_id: id,
+      p: { title: vals.title, weekday: Number(vals.weekday), start_time: start, end_time: end,
+           class_id: vals.class_id || null },
+    });
+    toast("Änderungen gespeichert.");
+    await reload({ silent: true });
+    return true;
+  } catch (err) {
+    toast(err.message, true);
+    return false;
+  }
+}
+
+async function editHoliday(id) {
+  const h = schoolHolidays.find((x) => x.id === id);
+  if (!h) return false;
+  const vals = await promptDlg("Ferien / freien Tag bearbeiten", [
+    { name: "label", label: "Bezeichnung", value: h.label, maxlength: 80 },
+    { name: "start_date", label: "Von", type: "date", value: h.start_date },
+    { name: "end_date", label: "Bis", type: "date", value: h.end_date },
+  ]);
+  if (!vals) return false;
+  if (vals.end_date < vals.start_date) { toast("„Bis“ darf nicht vor „Von“ liegen.", true); return false; }
+  const next = schoolHolidays.map((x) => x.id === id
+    ? { label: vals.label, start_date: vals.start_date, end_date: vals.end_date }
+    : { label: x.label, start_date: x.start_date, end_date: x.end_date });
+  try {
+    await rpc("set_school_holidays", { p_holidays: next });
+    toast("Änderungen gespeichert.");
+    await reload({ silent: true });
+    return true;
+  } catch (err) {
+    toast(err.message, true);
+    return false;
+  }
 }
 
 // ideen-backlog.md #22: die Verwaltungspunkte stehen als eigene Kacheln
@@ -2791,6 +2926,7 @@ function renderKalAdminRecurring() {
           <button type="button" class="icon-btn recurring-pin ${r.pinned ? "is-on" : ""}" data-action="recurring-pin" data-id="${r.id}"
                   aria-pressed="${r.pinned ? "true" : "false"}"
                   title="${r.pinned ? "Nicht mehr auf der Startseite anpinnen" : "Auf der Startseite anpinnen"}">${ICONS.pin}</button>
+          <button type="button" class="icon-btn" data-action="recurring-edit" data-id="${r.id}" title="Bearbeiten" aria-label="Bearbeiten">✎</button>
           <button type="button" class="icon-btn" data-action="recurring-delete" data-id="${r.id}" title="Löschen">✕</button>
         </li>`).join("")
     : `<p class="rubrik-panel-empty">Noch keine wiederkehrenden Ereignisse.</p>`;
@@ -2814,6 +2950,9 @@ function renderKalAdminRecurring() {
     } catch (err) {
       toast(err.message, true);
     }
+  }));
+  elKalAdminBody.querySelectorAll("[data-action='recurring-edit']").forEach((btn) => btn.addEventListener("click", async () => {
+    if (await editRecurring(btn.dataset.id)) renderKalAdminRecurring();
   }));
   elKalAdminBody.querySelectorAll("[data-action='recurring-delete']").forEach((btn) => btn.addEventListener("click", async () => {
     const ok = await confirmDlg("Dieses wiederkehrende Ereignis löschen?", "Löschen");
@@ -2872,6 +3011,7 @@ function renderKalAdminHolidays() {
     ? schoolHolidays.map((h) => `
         <li>
           <span class="grow"><b>${esc(h.label)}</b> — ${fmtDateLong(h.start_date)} bis ${fmtDateLong(h.end_date)}</span>
+          <button type="button" class="icon-btn" data-action="holiday-edit" data-id="${h.id}" title="Bearbeiten" aria-label="Bearbeiten">✎</button>
           <button type="button" class="icon-btn" data-action="holiday-delete" data-id="${h.id}" title="Löschen">✕</button>
         </li>`).join("")
     : `<p class="rubrik-panel-empty">Noch keine Ferien eingetragen.</p>`;
@@ -2885,6 +3025,9 @@ function renderKalAdminHolidays() {
     </div>`;
 
   elKalAdminBody.querySelector("[data-action='admin-back']").addEventListener("click", renderKalAdminHome);
+  elKalAdminBody.querySelectorAll("[data-action='holiday-edit']").forEach((btn) => btn.addEventListener("click", async () => {
+    if (await editHoliday(btn.dataset.id)) renderKalAdminHolidays();
+  }));
   elKalAdminBody.querySelectorAll("[data-action='holiday-delete']").forEach((btn) => btn.addEventListener("click", async () => {
     const ok = await confirmDlg("Diesen Ferien-/freien Tag löschen?", "Löschen");
     if (!ok) return;
@@ -4111,6 +4254,7 @@ async function doAction(fn, successMsg, onSuccess) {
 // p_admin_code) — diese Prüfung hier ist nur für eine saubere Oberfläche.
 const ADMIN_NUR_HAUPTLINK = new Set([
   "edit", "duplicate", "pin", "trash", "restore", "delete-forever", "add-linked", "empty-trash", "link-card", "unlink-cards",
+  "recurring-edit-row", "recurring-pin-row", "recurring-delete-row", "holiday-edit-row", "holiday-delete-row",
   "create-folder", "rename-folder", "delete-folder", "move-file",
   "archive-card", "unarchive-card", "open-kalender-admin", "edit-stundenplan",
 ]);
@@ -4259,6 +4403,26 @@ async function handleFeedClick(ev) {
     case "ics-download": {
       const c = cardById(cardId);
       if (c) downloadIcs(c);
+      break;
+    }
+    case "recurring-edit-row": { await editRecurring(btn.dataset.id); break; }
+    case "holiday-edit-row": { await editHoliday(btn.dataset.id); break; }
+    case "recurring-pin-row": {
+      const angepinnt = btn.dataset.pinned === "1";
+      await doAction(() => rpc("update_recurring_event", { p_id: btn.dataset.id, p: { pinned: !angepinnt } }),
+        angepinnt ? "Nicht mehr angepinnt." : "Angepinnt — erscheint auf der Startseite.");
+      break;
+    }
+    case "recurring-delete-row": {
+      if (!(await confirmDlg("Dieses wiederkehrende Ereignis löschen?", "Löschen"))) break;
+      await doAction(() => rpc("delete_recurring_event", { p_id: btn.dataset.id }), "Gelöscht.");
+      break;
+    }
+    case "holiday-delete-row": {
+      if (!(await confirmDlg("Diesen Ferien-/freien Tag löschen?", "Löschen"))) break;
+      const rest = schoolHolidays.filter((h) => h.id !== btn.dataset.id)
+        .map((h) => ({ label: h.label, start_date: h.start_date, end_date: h.end_date }));
+      await doAction(() => rpc("set_school_holidays", { p_holidays: rest }), "Gelöscht.");
       break;
     }
     case "link-card": {

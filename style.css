@@ -2302,6 +2302,27 @@ span.aufgabe-check { cursor: default; }
 .back-chip:hover { text-decoration: underline; }
 .back-chip svg { width: 12px; height: 12px; flex: 0 0 auto; display: block; }
 
+/* Wiederkehrende Ereignisse und Ferien als Zeilen unter den Monatsterminen */
+.cal-extras { margin-top: 14px; }
+.cal-extra-label {
+  margin: 14px 0 6px; font-size: .78rem; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted);
+}
+.cal-extra-row {
+  display: flex; align-items: center; gap: 8px; min-height: 40px;
+  padding: 6px 4px 6px 10px; border-bottom: 1px solid var(--line-soft); font-size: .92rem;
+}
+.cal-extra-tag { flex: 0 0 auto; min-width: 5.6em; font-weight: 700; color: var(--muted); font-size: .82rem; }
+.cal-extra-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.cal-extra-zeit { flex: 0 0 auto; color: var(--muted); font-size: .82rem; white-space: nowrap; }
+.cal-extra-pin { flex: 0 0 auto; display: inline-flex; color: var(--accent, var(--c-termin)); }
+.cal-extra-pin svg { width: 14px; height: 14px; display: block; }
+.cal-extra-menu { flex: 0 0 auto; }
+@media (max-width: 420px) {
+  .cal-extra-row { flex-wrap: wrap; }
+  .cal-extra-zeit { flex-basis: 100%; padding-left: calc(5.6em + 8px); }
+}
+
 /* Allgemeine Verknüpfungen (Migration 033) */
 .links-section {
   margin-top: 12px;
