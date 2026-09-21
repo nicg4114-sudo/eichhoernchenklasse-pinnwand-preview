@@ -5,12 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Eichhörnchenklasse — Pinnwand</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='0.9em'%20font-size='90'%3E%F0%9F%90%BF%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <!-- Symbole (Nutzerwunsch 21.09.2026): Eichhörnchen, Schmetterling oder beide
+       zusammen. Grundeinstellung "beide" (Hauptlink/Admins); die App tauscht
+       Reiter- und iPhone-Symbol je nach Klasse (siehe syncClassInUrl). -->
+  <link rel="icon" type="image/png" href="icons/favicon-beide.png">
 
   <!-- Installierbar als App-Icon (Android/iOS) -->
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#b1552a">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon-beide.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Pinnwand">
@@ -151,6 +154,17 @@
   </div>
   <div class="dlg-actions">
     <button class="btn ghost" data-close>Abbrechen</button>
+  </div>
+</dialog>
+
+<!-- Verknüpfen: bestehende Karte auswählen (Migration 033) -->
+<dialog id="dlgLink" class="dlg">
+  <h2>Mit bestehender Karte verknüpfen</h2>
+  <input type="search" id="linkSearch" class="search-input" placeholder="Karte suchen…" autocomplete="off">
+  <div id="linkList" class="link-list"></div>
+  <div class="dlg-actions">
+    <button type="button" class="btn ghost" id="linkNew" hidden>Neue Karte anlegen</button>
+    <button type="button" class="btn ghost" data-close>Abbrechen</button>
   </div>
 </dialog>
 

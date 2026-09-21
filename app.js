@@ -68,6 +68,17 @@ const ICONS = {
 // Punkt am "Mehr"-Knopf zeigt, dass es Neues gibt (siehe checkForNewVersion).
 const VERSIONS = [
   {
+    version: "21.09.2026",
+    items: [
+      "Termine können jetzt eine Endzeit haben: „18:30–20:00 Uhr“. Auch im Kalender und im Kalender-Abo endet der Termin dann zur richtigen Zeit.",
+      "Bei wiederkehrenden Terminen gibt es ebenfalls eine Endzeit. Ein Tipp auf den Kalendertag zeigt jetzt auch die Uhrzeit.",
+      "Angepinnte Termine (auch wiederkehrende) stehen auf der Startseite unter dem Stundenplan, je Termin in einer Zeile.",
+      "Fehler im Kalender behoben: Bei manchen Monaten fehlten die letzten Tage (z. B. 28.–30. September).",
+      "Karten verknüpfen: Jede Karte (Termin, Umfrage, Liste, Tabelle, Hinweis, Datei) lässt sich mit einer anderen verbinden — über „Verknüpfen …“ im Menü der Karte oder schon beim Anlegen. Verknüpfte Karten erscheinen unten als „Verknüpft mit …“ und lassen sich antippen.",
+      "Neue Symbole: Jede Klasse hat ihr Tier (Eichhörnchen, Schmetterling), auf dem Startbildschirm und in Benachrichtigungen. Auf dem iPhone erscheint das neue Symbol, wenn die App einmal vom Startbildschirm gelöscht und neu hinzugefügt wird.",
+    ],
+  },
+  {
     version: "19.09.2026",
     items: [
       "Neu: Anmeldung mit einem Passwort. Gib einmal den Namen deiner Klasse ein und du landest direkt in deinem Bereich. Zum Wechseln: „Mehr“ → „Abmelden / Klasse wechseln“.",
@@ -145,6 +156,7 @@ let loaded = false;
 let classesList = [];     // aus DB geladen: [{id, slug, name}, ...]
 let foldersList = [];     // aus DB geladen: [{id, class_id, name, created_by}, ...]
 let scheduleSlots = [];   // Stundenplan: [{id, class_id, weekday, period, start_time, end_time, subject, room}, ...]
+let cardLinks = [];       // allgemeine Verknüpfungen (Migration 033): [{card_a, card_b}, ...]
 let recurringEvents = []; // wiederkehrende Termine: [{id, class_id, weekday, start_time, title, body}, ...]
 let schoolHolidays = [];  // Ferien/freie Tage: [{id, label, start_date, end_date}, ...]
 // Kalender-Ansicht (siehe renderKalenderView): Monat, der gerade angezeigt
@@ -341,6 +353,7 @@ const NEU_BADGE = `<span class="neu-badge">Neu</span>`;
 
 const pollEditing = new Set();   // Karten-IDs, bei denen gerade Optionen gewählt werden
 let editorState = null;          // { mode: 'create'|'edit', type, card, items }
+let pendingLinkId = null;        // Karte, mit der die nächste neu angelegte Karte verknüpft wird (allgemeine Verknüpfung)
 let pendingParentId = null;      // Termin-Id, mit der die nächste neu angelegte Karte verknüpft wird
 
 // Geräte-Kennung für die Doppelstimmen-Sperre (zufällig, nicht personenbezogen)
@@ -378,6 +391,7 @@ const dlgPrompt = $("dlgPrompt");
 const dlgVersion = $("dlgVersion");
 const dlgTranslate = $("dlgTranslate");
 const dlgLogin = $("dlgLogin");
+const dlgLink = $("dlgLink");
 const elVersionBtn = $("moreVersionBtn");
 const dlgMore = $("dlgMore");
 const elMoreBtn = $("moreBtn");
@@ -536,6 +550,13 @@ function fmtTime(t) {
   return t ? `${t.slice(0, 5)} Uhr` : "";
 }
 
+// Termin-Zeit mit optionaler Endzeit (migration-030): "18:30–20:00 Uhr",
+// ohne Endzeit wie bisher "18:30 Uhr", ohne Startzeit leer.
+function fmtTimeRange(start, end) {
+  if (!start) return "";
+  return end ? `${start.slice(0, 5)}–${end.slice(0, 5)} Uhr` : `${start.slice(0, 5)} Uhr`;
+}
+
 function fmtSize(b) {
   return b >= 1048576
     ? `${(b / 1048576).toFixed(1).replace(".", ",")} MB`
@@ -577,13 +598,19 @@ function icsEscape(s) {
 }
 
 // Liefert Start/Ende passend fürs .ics- bzw. Google-Format. Ohne Uhrzeit:
-// ganztägig (Ende exklusiv, also der Folgetag). Mit Uhrzeit: 1 Stunde Dauer.
+// ganztägig (Ende exklusiv, also der Folgetag). Mit Uhrzeit: bis zur Endzeit
+// (migration-030), ohne Endzeit 1 Stunde Dauer.
 function eventRange(c) {
   const [y, m, d] = c.event_date.split("-").map(Number);
   if (c.event_time) {
     const [hh, mm] = c.event_time.slice(0, 5).split(":").map(Number);
     const start = new Date(y, m - 1, d, hh, mm);
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    let end = new Date(start.getTime() + 60 * 60 * 1000);
+    if (c.event_end_time) {
+      const [eh, em] = c.event_end_time.slice(0, 5).split(":").map(Number);
+      const gewuenscht = new Date(y, m - 1, d, eh, em);
+      if (gewuenscht > start) end = gewuenscht;
+    }
     return { startLocal: icsLocal(start), endLocal: icsLocal(end), allDay: false };
   }
   const endD = new Date(y, m - 1, d + 1);
@@ -702,6 +729,12 @@ async function fetchRecurringEvents() {
   return res.json();
 }
 
+async function fetchCardLinks() {
+  const res = await fetch(`${REST()}/card_links?select=card_a,card_b`, { headers: AUTH() });
+  if (!res.ok) throw await apiError(res);
+  return res.json();
+}
+
 async function fetchSchoolHolidays() {
   const res = await fetch(`${REST()}/school_holidays?select=*&order=start_date.asc`, { headers: AUTH() });
   if (!res.ok) throw await apiError(res);
@@ -781,6 +814,15 @@ function syncClassInUrl() {
   const link = document.querySelector('link[rel="manifest"]');
   const href = KLASSEN_MANIFESTE.has(slug) ? `manifest-${slug}.webmanifest` : "manifest.webmanifest";
   if (link && link.getAttribute("href") !== href) link.setAttribute("href", href);
+  // Nutzerwunsch 21.09.2026: Reiter- und iPhone-Symbol passend zur Klasse
+  // (Eichhörnchen, Schmetterling; ohne feste Klasse beide Tiere zusammen).
+  // iOS liest das Symbol beim "Zum Home-Bildschirm"-Hinzufügen aus dieser Seite.
+  const variante = KLASSEN_MANIFESTE.has(slug) ? slug : "beide";
+  for (const [sel, datei] of [['link[rel="apple-touch-icon"]', `icons/apple-touch-icon-${variante}.png`],
+                              ['link[rel="icon"]', `icons/favicon-${variante}.png`]]) {
+    const el = document.querySelector(sel);
+    if (el && el.getAttribute("href") !== datei) el.setAttribute("href", datei);
+  }
 }
 const KLASSEN_MANIFESTE = new Set(["eichhoernchen", "schmetterling"]);
 
@@ -841,6 +883,7 @@ const ADMIN_CODE_RPCS = new Set([
   "update_recurring_event", "delete_recurring_event", "set_school_holidays",
   "add_poll_option", "update_poll_option", "delete_poll_option",
   "list_feedback", "comment_feedback", "delete_feedback", "set_login_pflicht",
+  "link_cards", "unlink_cards",
 ]);
 
 async function rpc(name, args = {}) {
@@ -896,13 +939,14 @@ async function reload({ silent = false } = {}) {
   try {
     // Scheitert das Laden von Ordnern/Stundenplan/Ferien (z. B. Migration
     // noch nicht eingespielt), soll das die Karten selbst nicht blockieren.
-    const [cardsData, foldersData, slotsData, recurringData, holidaysData] = await Promise.all([
+    const [cardsData, foldersData, slotsData, recurringData, holidaysData, linksData] = await Promise.all([
       fetchCards(), fetchFolders().catch(() => foldersList),
       fetchScheduleSlots().catch(() => scheduleSlots),
       fetchRecurringEvents().catch(() => recurringEvents),
       fetchSchoolHolidays().catch(() => schoolHolidays),
+      fetchCardLinks().catch(() => cardLinks),   // Migration 033 evtl. noch nicht eingespielt
     ]);
-    const signature = JSON.stringify([cardsData, foldersData, slotsData, recurringData, holidaysData]);
+    const signature = JSON.stringify([cardsData, foldersData, slotsData, recurringData, holidaysData, linksData]);
     const now = Date.now();
     const mustForceRender = now - lastForcedRenderAt > FORCE_RENDER_INTERVAL_MS;
     const unchanged = silent && loaded && !pendingCardId && signature === lastReloadSignature && !mustForceRender;
@@ -912,6 +956,7 @@ async function reload({ silent = false } = {}) {
     scheduleSlots = slotsData;
     recurringEvents = recurringData;
     schoolHolidays = holidaysData;
+    cardLinks = linksData;
     loaded = true;
     elNotice.hidden = true;
     lastReloadSignature = signature;
@@ -964,7 +1009,7 @@ const MONTH_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "S
 
 function renderTermin(c, inTrash) {
   const d = parseISODate(c.event_date);
-  const sub = [fmtTime(c.event_time), c.event_location ? esc(c.event_location) : ""]
+  const sub = [fmtTimeRange(c.event_time, c.event_end_time), c.event_location ? esc(c.event_location) : ""]
     .filter(Boolean).join(" · ");
   const rel = inTrash ? "" : relativeDay(c.event_date);
   // Design-Review 18.09.2026: ein Knopf mit Auswahl statt zwei gleichrangiger
@@ -1277,7 +1322,8 @@ function renderCard(c, opts) {
       <button data-action="edit" data-card="${c.id}">Bearbeiten</button>
       ${duplicateBtn}
       ${moveBtn}
-      <button data-action="pin" data-card="${c.id}">${c.pinned ? "Nicht mehr anpinnen" : "Oben anpinnen"}</button>
+      <button data-action="pin" data-card="${c.id}">${pinLabel(c)}</button>
+      <button data-action="link-card" data-card="${c.id}">Verknüpfen …</button>
       ${archiveBtn}
       <button class="danger" data-action="trash" data-card="${c.id}">Löschen</button>`;
   }
@@ -1298,6 +1344,7 @@ function renderCard(c, opts) {
   if (c.type === "datei") body += renderDatei(c);
   // Verknüpfte Karten nur eine Ebene tief anzeigen (siehe renderLinkedSection).
   if (!(opts && opts.nested)) body += renderLinkedSection(c, inTrash);
+  if (!(opts && opts.nested) && !inTrash) body += renderLinksSection(c);
 
   const trashNote = inTrash
     ? `<p class="trash-note">Wird am ${purgeDate(c).toLocaleDateString("de-DE",
@@ -1407,6 +1454,104 @@ function renderLinkedSection(c, inTrash) {
     </details>`;
 }
 
+// Nutzerwunsch 21.09.2026 (Migration 033): allgemeine Verknüpfungen beliebig
+// nach beliebig. Gegenstück zu renderLinkedSection (das zeigt die alten
+// "hängt unter Termin/Hinweis"-Karten). Zeigt nur Partner, die nicht im
+// Papierkorb liegen und zur gewählten Klasse passen.
+function linkPartners(c) {
+  const out = [];
+  for (const l of cardLinks) {
+    const otherId = l.card_a === c.id ? l.card_b : l.card_b === c.id ? l.card_a : null;
+    if (!otherId) continue;
+    const o = cardById(otherId);
+    if (o && !o.trashed_at && inActiveClass(o)) out.push(o);
+  }
+  return out;
+}
+
+function linkLabel(x) {
+  return `${TYPE_LABELS[x.type] || x.type} · ${x.title || "(ohne Titel)"}`;
+}
+
+function renderLinksSection(c) {
+  const partners = linkPartners(c);
+  if (!partners.length) return "";
+  const chips = partners.map((x) => `
+    <span class="link-chip-wrap">
+      <button type="button" class="back-chip" data-action="jump-to-card" data-card="${x.id}">
+        ${ICONS.link}<span>${esc(linkLabel(x))}</span></button>${!isAdmin() ? "" : `
+      <button type="button" class="link-x" data-action="unlink-cards" data-card="${c.id}" data-other="${x.id}"
+        title="Verknüpfung lösen" aria-label="Verknüpfung mit ${esc(x.title)} lösen">×</button>`}
+    </span>`).join("");
+  return `<div class="links-section"><span class="links-label">Verknüpft mit</span>${chips}</div>`;
+}
+
+// Auswahlfenster "Mit bestehender Karte verknüpfen". ctx: {exclude:Set,
+// classId (Klasse der Ziel-Karte oder ""), onPick(id), onNew() optional}.
+let linkPickerCtx = null;
+function openLinkPicker(ctx) {
+  linkPickerCtx = ctx;
+  $("linkSearch").value = "";
+  $("linkNew").hidden = !ctx.onNew;
+  renderLinkPicker();
+  dlgLink.showModal();
+}
+
+function renderLinkPicker() {
+  const ctx = linkPickerCtx;
+  if (!ctx) return;
+  const q = $("linkSearch").value.trim().toLowerCase();
+  const list = cards.filter((x) =>
+    !x.trashed_at && !ctx.exclude.has(x.id) &&
+    inActiveClass(x) &&
+    (!ctx.classId || !x.class_id || x.class_id === ctx.classId) &&
+    (!q || linkLabel(x).toLowerCase().includes(q)));
+  const rows = list.slice(0, 60).map((x) => {
+    const datum = x.type === "termin" && x.event_date ? ` · ${esc(fmtDateShortSafe(x.event_date))}` : "";
+    return `<button type="button" class="link-pick" data-pick="${x.id}">
+      <b>${esc(x.title || "(ohne Titel)")}</b><small>${esc(TYPE_LABELS[x.type] || x.type)}${datum}</small></button>`;
+  }).join("");
+  $("linkList").innerHTML = rows ||
+    `<p class="linked-empty">Keine passende Karte gefunden.</p>`;
+}
+
+function fmtDateShortSafe(s) {
+  try { return parseISODate(s).toLocaleDateString("de-DE", { day: "numeric", month: "short", year: "numeric" }); }
+  catch { return s; }
+}
+
+// Editor (Neuanlegen): Liste der vorgemerkten Verknüpfungen samt Knopf.
+function renderEditLinks() {
+  const box = $("editLinks");
+  if (!box) return;
+  const ids = editorState.links || [];
+  box.innerHTML = ids.map((id) => {
+    const x = cardById(id);
+    return x ? `<span class="link-chip-wrap"><span class="back-chip">${ICONS.link}<span>${esc(linkLabel(x))}</span></span>
+      <button type="button" class="link-x" data-unpick="${id}" title="Entfernen" aria-label="Verknüpfung entfernen">×</button></span>` : "";
+  }).join("");
+}
+
+function setupEditorLinks() {
+  const add = $("editLinkAdd");
+  if (!add) return;
+  renderEditLinks();
+  add.addEventListener("click", () => {
+    const classSel = $("editorClassSelect") || document.querySelector('#editorForm [name="class_id"]');
+    openLinkPicker({
+      exclude: new Set(editorState.links || []),
+      classId: classSel ? classSel.value : (activeClassId || ""),
+      onPick: (id) => { editorState.links.push(id); renderEditLinks(); },
+    });
+  });
+  $("editLinks").addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-unpick]");
+    if (!b) return;
+    editorState.links = editorState.links.filter((id) => id !== b.dataset.unpick);
+    renderEditLinks();
+  });
+}
+
 /* ---------- Gruppierte Übersicht (Pinnwand) ---------- */
 
 // Kompakte Chat-Bubble für eine Kurznachricht (Hinweis mit is_kurznachricht)
@@ -1444,6 +1589,74 @@ function renderKurznachricht(c) {
 // senkrechte Liste zum Aufklappen. Vorher füllte ein einzelner Hinweis im
 // Karussell den ersten Bildschirm, die übrigen sah nur, wer wischte, und
 // der nächste Termin lag unterhalb des sichtbaren Bereichs.
+// Beschriftung des Anpinn-Knopfs: Termine erscheinen angepinnt auch auf der
+// Startseite (Nutzerwunsch 21.09.2026), das steht deshalb im Knopf.
+function pinLabel(c) {
+  if (c.pinned) return "Nicht mehr anpinnen";
+  return c.type === "termin" ? "Auf der Startseite anpinnen" : "Oben anpinnen";
+}
+
+// ---- Angepinnte Termine auf der Startseite (Nutzerwunsch 21.09.2026) ----
+// Unter "Zum Stundenplan" steht je angepinntem Termin eine schmale Zeile.
+// Einzeltermine nutzen cards.pinned (dasselbe "Anpinnen" wie bisher, es
+// sortiert weiter auch oben in der Termin-Liste), wiederkehrende Termine
+// recurring_events.pinned (Migration 032). Nach dem nächsten Vorkommen
+// sortiert, höchstens PIN_ZEILEN_MAX Zeilen, der Rest als "+N weitere".
+// Vergangene Termine fehlen von selbst: list enthält nur nicht archivierte
+// Karten der aktiven Klasse (inActiveClass), wiederkehrende werden nach
+// inActiveClassGeneric gefiltert — Eichhörnchen- und Schmetterlings-Termine
+// bleiben getrennt, gemeinsame (class_id leer) erscheinen bei beiden.
+const PIN_ZEILEN_MAX = 4;
+const MONAT_KURZ = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."];
+
+function naechstesVorkommen(weekday) {
+  const heute = todayStart();
+  const tage = (weekday - isoWeekday(heute) + 7) % 7;
+  return toISODate(new Date(heute.getFullYear(), heute.getMonth(), heute.getDate() + tage));
+}
+
+function angepinnteTermine(termine) {
+  const einzel = termine.filter((c) => c.pinned && c.event_date)
+    .map((c) => ({ art: "einzel", datum: c.event_date, zeit: c.event_time || "", c }));
+  const wiederkehrend = recurringEvents
+    .filter((r) => r.pinned && inActiveClassGeneric(r.class_id))
+    .map((r) => ({ art: "wiederkehrend", datum: naechstesVorkommen(r.weekday), zeit: r.start_time || "", r }));
+  return einzel.concat(wiederkehrend)
+    .sort((a, b) => `${a.datum} ${a.zeit || "99:99"}`.localeCompare(`${b.datum} ${b.zeit || "99:99"}`));
+}
+
+function renderAngepinnteTermine(termine) {
+  const alle = angepinnteTermine(termine);
+  if (!alle.length) return "";
+  const sichtbar = alle.slice(0, PIN_ZEILEN_MAX);
+  const rest = alle.length - sichtbar.length;
+  const zeilen = sichtbar.map((e) => {
+    if (e.art === "einzel") {
+      const d = parseISODate(e.c.event_date);
+      const zeit = fmtTimeRange(e.c.event_time, e.c.event_end_time).replace(/ Uhr$/, "");
+      return `
+        <button type="button" class="pin-row" data-action="open-rubrik" data-type="termin" data-card="${e.c.id}">
+          <span class="pin-row-icon" aria-hidden="true">${ICONS.pin}</span>
+          <span class="pin-row-tag">${WEEKDAY_SHORT[isoWeekday(d)]} ${d.getDate()}. ${MONAT_KURZ[d.getMonth()]}</span>
+          <span class="pin-row-title">${esc(e.c.title)}</span>
+          <span class="pin-row-zeit">${esc(zeit)}</span>
+        </button>`;
+    }
+    const zeit = fmtTimeRange(e.r.start_time, e.r.end_time).replace(/ Uhr$/, "");
+    return `
+        <button type="button" class="pin-row" data-action="pin-wiederkehrend" data-id="${e.r.id}">
+          <span class="pin-row-icon" aria-hidden="true">${ICONS.pin}</span>
+          <span class="pin-row-tag">Jeden ${WEEKDAY_SHORT[e.r.weekday]}</span>
+          <span class="pin-row-title">${esc(e.r.title)}</span>
+          <span class="pin-row-zeit">${esc(zeit)}</span>
+        </button>`;
+  }).join("");
+  const mehr = rest > 0
+    ? `<button type="button" class="pin-row pin-row-mehr" data-action="open-rubrik" data-type="termin">+ ${rest} weitere angepinnte Termine</button>`
+    : "";
+  return `<div class="pin-rows" role="group" aria-label="Angepinnte Termine">${zeilen}${mehr}</div>`;
+}
+
 function renderStart(list) {
   // Bewusst nicht die Fetch-Reihenfolge (pinned zuerst) übernehmen — der
   // zeitlich neuste Hinweis steht oben, auch wenn ein älterer angepinnt ist
@@ -1458,6 +1671,7 @@ function renderStart(list) {
     + `<h2 class="dash-section-label">Als Nächstes</h2>`
     + renderNextRow(termine, list)
     + renderStundenplanStrip()
+    + renderAngepinnteTermine(termine)
     + `<h2 class="dash-section-label">Hinweise${neu ? ` <span class="neu-count">${neu} neu</span>` : ""}</h2>`
     + renderHinweisList(hinweise);
 }
@@ -1677,7 +1891,7 @@ function renderNextRow(termine, list) {
   let terminTile = "";
   if (next) {
     const d = parseISODate(next.event_date);
-    const when = [relativeDay(next.event_date), fmtTime(next.event_time)].filter(Boolean).join(" · ");
+    const when = [relativeDay(next.event_date), fmtTimeRange(next.event_time, next.event_end_time)].filter(Boolean).join(" · ");
     terminTile = `
       <button class="dash-tile dash-tile-termin" data-action="open-rubrik" data-type="termin" data-card="${next.id}">
         <span class="dash-tile-termin-label">Nächster Termin</span>
@@ -1731,7 +1945,7 @@ function renderAccordionStrip(c, { isOpen, action, dateLabel, sub, isNew = false
 // Der Wochentag steht direkt am Datum.
 function renderTerminStrip(c) {
   const d = parseISODate(c.event_date);
-  const sub = [relativeDay(c.event_date), fmtTime(c.event_time), c.event_location || ""]
+  const sub = [relativeDay(c.event_date), fmtTimeRange(c.event_time, c.event_end_time), c.event_location || ""]
     .filter(Boolean).join(" · ");
   return renderAccordionStrip(c, {
     isOpen: c.id === openTerminId,
@@ -2034,7 +2248,6 @@ function renderKalenderMonth() {
   // ausgegrauter Kästchen mit Lücken.
   let weekRows = "";
   let dayCount = 0;
-  outer:
   for (let week = 0; week < 6; week++) {
     let weekCells = "";
     let weekNum = null;
@@ -2087,15 +2300,20 @@ function renderKalenderMonth() {
           ${recurring.length ? `<span class="cal-day-dot cal-day-dot-recurring" title="Wiederkehrendes Ereignis"></span>` : ""}
         </button>`;
       dayCount++;
-      // Nach dem letzten Tag des Monats nicht unnötig eine ganze weitere,
-      // komplett leere Woche anhängen.
-      if (dayCount >= 35 && d.getMonth() !== month.getMonth() && wd === 6) break outer;
     }
     weekRows += `
       <div class="cal-week-row ${week % 2 === 0 ? "cal-week-dark" : "cal-week-light"}">
         <span class="cal-week-num">${weekNum}</span>
         <div class="cal-week-days">${weekCells}</div>
       </div>`;
+    // Nach der Woche, in der der Monat endet, aufhören — nicht unnötig eine
+    // ganze weitere, leere Woche anhängen. (Bugfix 21.09.2026: Vorher wurde
+    // schon VOR dem Eintragen dieser letzten Woche abgebrochen, dadurch
+    // fehlten z. B. im September 2026 der 28.–30. und im Oktober der
+    // 26.–31. im Kalender.)
+    const wocheEnde = new Date(gridStart);
+    wocheEnde.setDate(gridStart.getDate() + week * 7 + 6);
+    if (wocheEnde >= new Date(month.getFullYear(), month.getMonth() + 1, 0)) break;
   }
 
   return `
@@ -2195,7 +2413,11 @@ function wireKalender() {
     const holiday = holidayForDate(date);
     if (holiday) { toast(`${holiday.label} — kein Unterricht`); return; }
     const recurring = recurringForDate(date, isoWeekday(parseISODate(date)));
-    if (recurring.length) { toast(recurring.map((r) => r.title).join(", ")); return; }
+    if (recurring.length) {
+      toast(recurring.map((r) => r.start_time
+        ? `${r.title} (${fmtTimeRange(r.start_time, r.end_time)})` : r.title).join(", "), false, 6000);
+      return;
+    }
     toast("Nichts los an diesem Tag.");
   }));
   elFeed.querySelector("[data-action='cal-prev']")?.addEventListener("click", () => {
@@ -2563,9 +2785,12 @@ function renderKalAdminRecurring() {
     ? recurringEvents.map((r) => `
         <li>
           <span class="grow">
-            <b>${WEEKDAY_LABEL[r.weekday]}${r.start_time ? `, ${fmtTime(r.start_time)}` : ""}</b> — ${esc(r.title)}
+            <b>${WEEKDAY_LABEL[r.weekday]}${r.start_time ? `, ${fmtTimeRange(r.start_time, r.end_time)}` : ""}</b> — ${esc(r.title)}
             ${r.class_id ? `<span class="who">${CLASS_ICON[classesList.find((c) => c.id === r.class_id)?.slug] || ""}</span>` : ""}
           </span>
+          <button type="button" class="icon-btn recurring-pin ${r.pinned ? "is-on" : ""}" data-action="recurring-pin" data-id="${r.id}"
+                  aria-pressed="${r.pinned ? "true" : "false"}"
+                  title="${r.pinned ? "Nicht mehr auf der Startseite anpinnen" : "Auf der Startseite anpinnen"}">${ICONS.pin}</button>
           <button type="button" class="icon-btn" data-action="recurring-delete" data-id="${r.id}" title="Löschen">✕</button>
         </li>`).join("")
     : `<p class="rubrik-panel-empty">Noch keine wiederkehrenden Ereignisse.</p>`;
@@ -2579,6 +2804,17 @@ function renderKalAdminRecurring() {
     </div>`;
 
   elKalAdminBody.querySelector("[data-action='admin-back']").addEventListener("click", renderKalAdminHome);
+  elKalAdminBody.querySelectorAll("[data-action='recurring-pin']").forEach((btn) => btn.addEventListener("click", async () => {
+    const angepinnt = btn.getAttribute("aria-pressed") === "true";
+    try {
+      await rpc("update_recurring_event", { p_id: btn.dataset.id, p: { pinned: !angepinnt } });
+      toast(angepinnt ? "Nicht mehr angepinnt." : "Angepinnt — erscheint auf der Startseite.");
+      await reload({ silent: true });
+      renderKalAdminRecurring();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }));
   elKalAdminBody.querySelectorAll("[data-action='recurring-delete']").forEach((btn) => btn.addEventListener("click", async () => {
     const ok = await confirmDlg("Dieses wiederkehrende Ereignis löschen?", "Löschen");
     if (!ok) return;
@@ -2595,7 +2831,8 @@ function renderKalAdminRecurring() {
     const vals = await promptDlg("Neues wiederkehrendes Ereignis", [
       { name: "title", label: "Titel", placeholder: "z. B. Gemeinsames Frühstück", maxlength: 120 },
       { name: "weekday", label: "Wochentag", value: "3", options: WOCHENTAG_OPTIONS },
-      { name: "start_time", label: "Uhrzeit (optional)", placeholder: "08:00", optional: true, maxlength: 5 },
+      { name: "start_time", label: "Uhrzeit von (optional)", type: "time", optional: true },
+      { name: "end_time", label: "Uhrzeit bis (optional)", type: "time", optional: true },
       { name: "class_id", label: "Gilt für", value: activeClassId || "",
         options: [{ value: "", label: "Beide Klassen" }].concat(
           classesList.map((cl) => ({ value: cl.id, label: `${CLASS_ICON[cl.slug] || ""} ${cl.name}` }))) },
@@ -2603,12 +2840,19 @@ function renderKalAdminRecurring() {
         placeholder: "z. B. Frau Müller, Lehrkraft", maxlength: 80, value: localStorage.getItem(CREATOR_NAME_KEY) || "" },
     ]);
     if (!vals) return;
+    // Endzeit nur zusammen mit Startzeit und danach (Prüfung auch in der Datenbank).
+    const endTime = vals.start_time ? (vals.end_time || null) : null;
+    if (endTime && endTime <= vals.start_time) {
+      toast("Die Endzeit muss nach der Startzeit liegen.", true);
+      return;
+    }
     localStorage.setItem(CREATOR_NAME_KEY, vals.creator_name);
     try {
       await rpc("create_recurring_event", {
         p: {
           title: vals.title, weekday: Number(vals.weekday),
-          start_time: vals.start_time || null, class_id: vals.class_id || null,
+          start_time: vals.start_time || null, end_time: endTime,
+          class_id: vals.class_id || null,
           created_by: vals.creator_name,
         },
       });
@@ -3088,6 +3332,8 @@ function editorFieldsHtml(type, card) {
       `<input type="date" name="event_date" required value="${v("event_date")}">`);
     html += fieldHtml("Uhrzeit",
       `<input type="time" name="event_time" value="${card && card.event_time ? esc(card.event_time.slice(0, 5)) : ""}">`);
+    html += fieldHtml("Uhrzeit bis (freiwillig)",
+      `<input type="time" name="event_end_time" value="${card && card.event_end_time ? esc(card.event_end_time.slice(0, 5)) : ""}">`);
     html += fieldHtml("Ort",
       `<input type="text" name="event_location" maxlength="120" value="${v("event_location")}">`);
   }
@@ -3266,6 +3512,7 @@ function templateFromCard(c) {
       ? String(c.body || "").replace(/<img\b[^>]*>/gi, "")
       : (c.body || ""),
     event_time: c.event_time ? c.event_time.slice(0, 5) : "",
+    event_end_time: c.event_end_time ? c.event_end_time.slice(0, 5) : "",
     event_location: c.event_location || "",
     is_kurznachricht: !!c.is_kurznachricht,
     is_aufgabe: !!c.is_aufgabe,
@@ -3346,12 +3593,22 @@ function openEditor(type, card = null, parentId = null, template = null) {
         }))
       : [],
     attachments: [],   // neu hochgeladene Anhänge dieser Sitzung (Hinweis/Termin)
+    links: [],         // nur beim Anlegen: Ids bestehender Karten, mit denen verknüpft wird (Migration 033)
   };
   const parent = parentId ? cardById(parentId) : null;
   $("editorTitle").textContent =
     (card ? "Bearbeiten: " : "Neu: ") + TYPE_LABELS[type] +
     (parent ? ` (verknüpft mit „${parent.title}“)` : "");
   $("editorFields").innerHTML = editorFieldsHtml(type, card);
+  if (!card && isAdmin()) {
+    $("editorFields").insertAdjacentHTML("beforeend", `
+      <div class="field editor-links">
+        <span>Verknüpfen (freiwillig)</span>
+        <div id="editLinks" class="editor-links-list"></div>
+        <button type="button" class="btn small link" id="editLinkAdd">+ Mit bestehender Karte verknüpfen</button>
+      </div>`);
+    setupEditorLinks();
+  }
   $("editorError").hidden = true;
   $("editorSubmit").disabled = false;
   $("editorSubmit").textContent = "Speichern";
@@ -3678,6 +3935,11 @@ async function submitEditor() {
         p.event_date = String(fd.get("event_date") || "");
         if (!p.event_date) return editorFail("Bitte ein Datum wählen.");
         p.event_time = String(fd.get("event_time") || "");
+        // Endzeit nur zusammen mit Startzeit und danach (Prüfung auch in der Datenbank).
+        p.event_end_time = p.event_time ? String(fd.get("event_end_time") || "") : "";
+        if (p.event_end_time && p.event_end_time <= p.event_time) {
+          return editorFail("Die Endzeit muss nach der Startzeit liegen.");
+        }
         p.event_location = String(fd.get("event_location") || "").trim();
       }
 
@@ -3723,15 +3985,29 @@ async function submitEditor() {
       // migration-028: ältere Datenbanken ignorieren das Feld einfach.
       p.notify = fd.get("notify") === "on";
 
-      await rpc("create_card", { p });
+      const newId = await rpc("create_card", { p });
       if (st.stopDraft) st.stopDraft();
-      toast(p.notify ? "Karte erstellt." : "Karte erstellt — ohne Push-Benachrichtigung.");
+      let linkFehler = "";
+      for (const otherId of (st.links || [])) {
+        try { await rpc("link_cards", { p_a: newId, p_b: otherId }); }
+        catch (e) { linkFehler = e.message; }
+      }
+      if (linkFehler) {
+        toast(`Karte erstellt, aber die Verknüpfung ist nicht gelungen: ${linkFehler}`, true, 7000);
+      } else {
+        toast(p.notify ? "Karte erstellt." : "Karte erstellt — ohne Push-Benachrichtigung.");
+      }
     } else {
       const p = { ...common };
       if (st.type === "termin") {
         p.event_date = String(fd.get("event_date") || "");
         if (!p.event_date) return editorFail("Bitte ein Datum wählen.");
         p.event_time = String(fd.get("event_time") || "");
+        // Endzeit nur zusammen mit Startzeit und danach (Prüfung auch in der Datenbank).
+        p.event_end_time = p.event_time ? String(fd.get("event_end_time") || "") : "";
+        if (p.event_end_time && p.event_end_time <= p.event_time) {
+          return editorFail("Die Endzeit muss nach der Startzeit liegen.");
+        }
         p.event_location = String(fd.get("event_location") || "").trim();
       }
       if ((st.type === "hinweis" || st.type === "termin") && st.attachments.length) {
@@ -3834,7 +4110,7 @@ async function doAction(fn, successMsg, onSuccess) {
 // eigentliche Absicherung liegt in der Datenbank (migration-021,
 // p_admin_code) — diese Prüfung hier ist nur für eine saubere Oberfläche.
 const ADMIN_NUR_HAUPTLINK = new Set([
-  "edit", "duplicate", "pin", "trash", "restore", "delete-forever", "add-linked", "empty-trash",
+  "edit", "duplicate", "pin", "trash", "restore", "delete-forever", "add-linked", "empty-trash", "link-card", "unlink-cards",
   "create-folder", "rename-folder", "delete-folder", "move-file",
   "archive-card", "unarchive-card", "open-kalender-admin", "edit-stundenplan",
 ]);
@@ -3985,6 +4261,25 @@ async function handleFeedClick(ev) {
       if (c) downloadIcs(c);
       break;
     }
+    case "link-card": {
+      const c = cardById(cardId);
+      if (!c) break;
+      const schon = new Set([c.id, ...linkPartners(c).map((x) => x.id)]);
+      openLinkPicker({
+        exclude: schon,
+        classId: c.class_id || "",
+        onPick: async (id) => {
+          await doAction(() => rpc("link_cards", { p_a: c.id, p_b: id }), "Verknüpft.");
+        },
+        onNew: () => { pendingLinkId = c.id; pendingParentId = null; dlgType.showModal(); },
+      });
+      break;
+    }
+    case "unlink-cards": {
+      await doAction(() => rpc("unlink_cards", { p_a: cardId, p_b: btn.dataset.other }),
+        "Verknüpfung gelöst.");
+      break;
+    }
     case "add-linked": {
       // ideen-backlog.md #10: bei einem Hinweis als Ziel ist bewusst nur
       // "Datei" erlaubt (z. B. eine Packliste an einen Wandertag-Hinweis
@@ -4010,6 +4305,14 @@ async function handleFeedClick(ev) {
     // Die drei Bubbles auf der Startseite (Termin/Beteiligung/Datei) sowie
     // die "Nächster Termin"-Zeile (data-card mitgegeben, um genau diesen
     // Termin gleich aufgeklappt zu zeigen).
+    case "pin-wiederkehrend": {
+      const r = recurringEvents.find((x) => x.id === btn.dataset.id);
+      if (r) {
+        const zeit = fmtTimeRange(r.start_time, r.end_time);
+        toast(`${r.title} — jeden ${WEEKDAY_LABEL[r.weekday]}${zeit ? `, ${zeit}` : ""}`, false, 6000);
+      }
+      break;
+    }
     case "open-rubrik": {
       const type = btn.dataset.type;
       if (type === "datei") {
@@ -4555,7 +4858,7 @@ async function init() {
   });
 
   // Neu erstellen
-  elFab.addEventListener("click", () => { pendingParentId = null; dlgType.showModal(); });
+  elFab.addEventListener("click", () => { pendingParentId = null; pendingLinkId = null; dlgType.showModal(); });
 
   if (elScrollTopBtn) {
     elScrollTopBtn.innerHTML = ICONS.arrowUp;
@@ -4565,13 +4868,35 @@ async function init() {
     window.addEventListener("scroll", updateScrollTopButton, { passive: true });
   }
   dlgType.addEventListener("click", (ev) => {
-    if (ev.target.closest("[data-close]")) { pendingParentId = null; return dlgType.close(); }
+    if (ev.target.closest("[data-close]")) { pendingParentId = null; pendingLinkId = null; return dlgType.close(); }
     const btn = ev.target.closest("[data-type]");
     if (!btn) return;
     const parentId = pendingParentId;
+    const linkId = pendingLinkId;
     pendingParentId = null;
+    pendingLinkId = null;
     dlgType.close();
     openEditor(btn.dataset.type, null, parentId);
+    if (linkId && editorState.mode === "create") { editorState.links = [linkId]; renderEditLinks(); }
+  });
+
+  // Auswahlfenster für Verknüpfungen
+  $("linkSearch").addEventListener("input", renderLinkPicker);
+  dlgLink.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-close]")) { linkPickerCtx = null; return dlgLink.close(); }
+    if (ev.target.closest("#linkNew")) {
+      const ctx = linkPickerCtx;
+      linkPickerCtx = null;
+      dlgLink.close();
+      if (ctx && ctx.onNew) ctx.onNew();
+      return;
+    }
+    const pick = ev.target.closest("[data-pick]");
+    if (!pick) return;
+    const ctx = linkPickerCtx;
+    linkPickerCtx = null;
+    dlgLink.close();
+    if (ctx) ctx.onPick(pick.dataset.pick);
   });
 
   // Editor

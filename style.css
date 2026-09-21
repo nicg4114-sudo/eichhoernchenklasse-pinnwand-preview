@@ -2302,6 +2302,37 @@ span.aufgabe-check { cursor: default; }
 .back-chip:hover { text-decoration: underline; }
 .back-chip svg { width: 12px; height: 12px; flex: 0 0 auto; display: block; }
 
+/* Allgemeine Verknüpfungen (Migration 033) */
+.links-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line-soft);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.links-label { font-size: .82rem; font-weight: 700; color: var(--muted); }
+.link-chip-wrap { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; }
+.link-chip-wrap .back-chip { margin: 0; max-width: 100%; }
+.link-chip-wrap .back-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-x {
+  border: none; background: transparent; color: var(--muted);
+  font-size: 1.1rem; line-height: 1; min-width: 28px; min-height: 28px;
+  border-radius: 999px; cursor: pointer;
+}
+.link-x:hover { background: var(--bg); color: var(--ink); }
+.editor-links-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.link-list { max-height: 50vh; overflow-y: auto; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
+.link-pick {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+  width: 100%; padding: 10px 12px; min-height: 44px; border: 1px solid var(--line-soft);
+  border-radius: 10px; background: var(--card, #fff); color: var(--ink); cursor: pointer; font: inherit;
+}
+.link-pick:hover { border-color: var(--muted); }
+.link-pick b { overflow-wrap: anywhere; }
+.link-pick small { color: var(--muted); }
+
 /* Aufklappbarer Bereich mit verknüpften Karten am Termin */
 .linked-section {
   margin-top: 12px;
@@ -2389,3 +2420,36 @@ span.aufgabe-check { cursor: default; }
 @media (max-width: 420px) {
   .topbar h1 { font-size: 1.1rem; }
 }
+
+/* ---------- Angepinnte Termine auf der Startseite (21.09.2026) ---------- */
+/* Je Termin eine schmale, einzeilige Zeile unter "Zum Stundenplan". */
+.pin-rows {
+  margin: 8px 0 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  overflow: hidden;
+}
+.pin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding: 6px 12px;
+  border: 0;
+  background: none;
+  text-align: start;
+  font: inherit;
+  font-size: .84rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pin-row + .pin-row { border-top: 1px solid var(--line); }
+.pin-row:hover { background: var(--bg); }
+.pin-row-icon svg { display: block; width: 14px; height: 14px; color: var(--accent-dk); }
+.pin-row-tag { color: var(--accent-dk); font-weight: 600; min-inline-size: 5.2em; }
+.pin-row-title { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
+.pin-row-zeit { color: var(--muted); }
+.pin-row-mehr { color: var(--muted); justify-content: center; }
+.recurring-pin.is-on { color: var(--accent-dk); }

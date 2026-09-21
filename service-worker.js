@@ -7,7 +7,7 @@
 // Anfragen an Supabase (die eigentlichen Pinnwand-Daten) laufen immer direkt
 // übers Netz, damit nie veraltete Inhalte angezeigt werden.
 
-const CACHE_NAME = "pinnwand-shell-v69";
+const CACHE_NAME = "pinnwand-shell-v75";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -64,6 +64,21 @@ self.addEventListener("fetch", (event) => {
 // Eintrag). Hier wird die eingehende Push-Nachricht nur noch als System-
 // Benachrichtigung angezeigt.
 
+// >>> push-symbole
+// Symbol und Statusleisten-Silhouette je Klasse (Nutzerwunsch 21.09.2026).
+// "klasse" schickt die Push-Funktion mit ("eichhoernchen", "schmetterling",
+// "beide"); fehlt es (älterer Server), gilt "beide". Auf dem iPhone zeigt die
+// Meldung immer das Startbildschirm-Symbol der App.
+const PUSH_SYMBOLE = {
+  eichhoernchen: { icon: "icons/icon-eichhoernchen-192.png", badge: "icons/badge-eichhoernchen.png" },
+  schmetterling: { icon: "icons/icon-schmetterling-192.png", badge: "icons/badge-schmetterling.png" },
+  beide: { icon: "icons/icon-beide-192.png", badge: "icons/badge-beide.png" },
+};
+function symboleFuer(klasse) {
+  return PUSH_SYMBOLE[klasse] || PUSH_SYMBOLE.beide;
+}
+// <<< push-symbole
+
 self.addEventListener("push", (event) => {
   let data = { title: "Neuigkeit auf der Pinnwand", body: "" };
   try {
@@ -80,9 +95,11 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: "icon-192.png",
-      badge: "icon-192.png",
-      tag: data.type || "pinnwand",
+      icon: symboleFuer(data.klasse).icon,
+      badge: symboleFuer(data.klasse).badge,
+      // Je Karte eine eigene Meldung (vorher je Art: zwei neue Termine kurz
+      // hintereinander überschrieben sich auf dem Handy).
+      tag: data.id || data.type || "pinnwand",
       data: { url },
     })
   );
